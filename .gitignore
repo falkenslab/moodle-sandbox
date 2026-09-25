@@ -1,0 +1,5 @@
+# Código de Moodle clonado por manage.mjs (desechable, tiene su propio historial)
+src/
+# Credenciales generadas por manage.mjs
+.env
+*.log

@@ -1,0 +1,19 @@
+{
+  "name": "moodle-sandbox",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Moodle real en Docker con un curso de pruebas, para probar agentes de alumno y de profesor",
+  "author": "Francisco Vargas Ruiz",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "setup": "node manage.mjs setup",
+    "up": "node manage.mjs up",
+    "down": "node manage.mjs down",
+    "seed": "node manage.mjs seed",
+    "status": "node manage.mjs status",
+    "reset": "node manage.mjs reset"
+  }
+}
