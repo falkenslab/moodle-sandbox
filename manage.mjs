@@ -127,14 +127,19 @@ async function up() {
 }
 
 /** Composer no viene en la imagen y no persiste entre contenedores nuevos, pero
- * como se instala dentro de src/ (bind-mount), sobrevive a un `docker compose down`. */
+ * como se instala dentro de src/ (bind-mount), sobrevive a un `docker compose down`.
+ * Se da por hecho solo con vendor/autoload.php (lo último que escribe): un vendor/ a
+ * medias, de un install interrumpido, se completa en vez de saltarse. */
 function composerInstall() {
-  if (existsSync(path.join(srcDir, "vendor"))) {
-    log("vendor/ ya existe, se omite composer install (borra src/vendor para forzarlo).");
+  if (existsSync(path.join(srcDir, "vendor", "autoload.php"))) {
+    log("vendor/ ya está instalado, se omite composer install (borra src/vendor para forzarlo).");
     return;
   }
   log("Instalando Composer y dependencias (incluye dev, hace falta para sembrar el curso)...");
+  // Sin límite de tiempo por proceso: en Windows, descomprimir un paquete sobre el
+  // bind-mount de src/ puede pasar de los 300 s por defecto de Composer.
   composeExec([
+    "env", "COMPOSER_PROCESS_TIMEOUT=0",
     "bash", "-c",
     "test -f composer.phar || (curl -sS https://getcomposer.org/installer -o /tmp/cs.php " +
       "&& php /tmp/cs.php --install-dir=. --filename=composer.phar); " +
