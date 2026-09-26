@@ -17,6 +17,7 @@
     "status": "node manage.mjs status",
     "info": "node manage.mjs info",
     "tasks": "node manage.mjs tasks",
+    "course": "node manage.mjs course",
     "reset": "node manage.mjs reset"
   }
 }

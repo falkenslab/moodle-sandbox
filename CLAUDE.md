@@ -14,6 +14,7 @@ npm run up | down | status
 npm run seed             # re-seed the demo course (no-op if it already exists)
 npm run activity         # teacher workload on top of it: students, submissions, forum doubts
 npm run info -- --json   # the agents' contract: url, course id, credentials (exit 1 if not ready)
+npm run course -- <short> ["Full name"] --json   # an empty course with the teacher and students enrolled
 npm run reset -- --yes   # wipes containers, volumes, src/ and .env
 ```
 

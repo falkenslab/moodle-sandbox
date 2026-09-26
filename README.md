@@ -37,6 +37,7 @@ npm run seed          # vuelve a sembrar el curso de pruebas (no hace nada si ya
 npm run activity      # añade trabajo para un agente de profesor (ver más abajo)
 npm run info          # URL, id del curso y credenciales (con -- --json, para agentes)
 npm run tasks         # ejecuta las tareas pendientes de Moodle (el sandbox no tiene cron)
+npm run course -- <nombre-corto> ["Nombre completo"] [--json]   # crea un curso vacío (ver abajo)
 npm run reset -- --yes   # borra todo (contenedores, datos y código de Moodle) para empezar de cero
 ```
 
@@ -77,6 +78,13 @@ programación (variables y tipos de datos):
 
 Se puede ejecutar más de una vez: si ya está sembrada, no hace nada.
 
+### Cursos vacíos para construir
+
+`npm run course -- docker-intro "Introducción a Docker"` crea un curso vacío con el profesor
+(como `editingteacher`) y los alumnos sembrados matriculados, para que un agente de profesor lo
+construya entero. Si ya existe un curso con ese nombre corto no lo toca y devuelve su id. Con
+`--json` imprime solo `{ id, shortname, fullname, url, created }`.
+
 ### Usarlo desde un agente
 
 `npm run info -- --json` es el contrato para los agentes: imprime solo este JSON y sale con
@@ -99,7 +107,8 @@ Un agente debería depender solo de este comando, no de `.env` ni de la base de 
 ├── docker-compose.yml   # Postgres + Moodle (proyecto Docker "moodle-sandbox")
 ├── seed/
 │   ├── seed-course.php  # crea el curso, el profesor, el alumno y las actividades
-│   └── seed-teacher-activity.php  # alumnos, entregas y dudas para un agente de profesor
+│   ├── seed-teacher-activity.php  # alumnos, entregas y dudas para un agente de profesor
+│   └── seed-empty-course.php     # curso vacío para construir (npm run course)
 ├── .env                 # credenciales generadas (se crea solo, no se sube al repo)
 └── src/                 # código de Moodle descargado (se crea solo, no se sube al repo)
 ```

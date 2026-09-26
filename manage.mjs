@@ -20,6 +20,7 @@ const srcDir = path.join(moodleDir, "src");
 const envPath = path.join(moodleDir, ".env");
 const seedScript = path.join(moodleDir, "seed", "seed-course.php");
 const activityScript = path.join(moodleDir, "seed", "seed-teacher-activity.php");
+const emptyCourseScript = path.join(moodleDir, "seed", "seed-empty-course.php");
 
 const MOODLE_REPO = "https://github.com/moodle/moodle.git";
 const MOODLE_BRANCH = process.env.MOODLE_BRANCH || "MOODLE_502_STABLE";
@@ -252,6 +253,35 @@ function activity() {
   runAdhocTasks();
 }
 
+/**
+ * Crea un curso vacío (o devuelve el que ya tiene ese nombre corto) para que un agente de
+ * profesor lo construya entero, con el profesor y los alumnos sembrados matriculados.
+ * `course <nombre-corto> ["Nombre completo"] [--json]`; con --json imprime solo
+ * {id, shortname, fullname, url, created}.
+ */
+function course(args) {
+  const json = args.includes("--json");
+  const [shortname, fullname] = args.filter((a) => a !== "--json");
+  if (!shortname) throw new Error('Uso: npm run course -- <nombre-corto> ["Nombre completo"] [--json]');
+  copyFileSync(emptyCourseScript, path.join(srcDir, "seed-empty-course.php"));
+  const vars = readEnvFile();
+  const result = runCapture("docker", [
+    "compose", "exec", "-T", "webserver", "env",
+    `COURSE_SHORTNAME=${shortname}`, `COURSE_FULLNAME=${fullname ?? shortname}`,
+    `MOODLE_TEACHER_USERNAME=${vars.MOODLE_TEACHER_USERNAME ?? "profesor"}`,
+    `MOODLE_STUDENT_USERNAME=${vars.MOODLE_STUDENT_USERNAME ?? "alumno"}`,
+    "php", "seed-empty-course.php",
+  ]);
+  if (result.status !== 0) throw new Error(`No se pudo crear el curso: ${(result.stderr || result.stdout).trim()}`);
+  const created = JSON.parse(result.stdout.trim().split(/\r?\n/).at(-1));
+  const data = { ...created, url: `${installedWwwroot()}/course/view.php?id=${created.id}` };
+  if (json) {
+    process.stdout.write(`${JSON.stringify(data, null, 2)}\n`);
+    return;
+  }
+  log(`${data.created ? "Curso creado" : "El curso ya existía"}: ${data.fullname} (id ${data.id}) → ${data.url}`);
+}
+
 function down() {
   compose(["down"]);
 }
@@ -350,7 +380,7 @@ async function setup() {
   log(`  Alumno:   ${vars.MOODLE_STUDENT_USERNAME} / ${vars.MOODLE_STUDENT_PASSWORD}`);
 }
 
-const COMMANDS = { clone: ensureClone, env: ensureEnv, up, composer: composerInstall, install: installSite, seed, activity, setup, down, reset, status, info, tasks: runAdhocTasks };
+const COMMANDS = { clone: ensureClone, env: ensureEnv, up, composer: composerInstall, install: installSite, seed, activity, setup, down, reset, status, info, tasks: runAdhocTasks, course };
 
 const [, , cmd, ...rest] = process.argv;
 if (!cmd || !(cmd in COMMANDS)) {
