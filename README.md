@@ -76,7 +76,9 @@ programación (variables y tipos de datos):
   entrega completa, una floja y otra con un error conceptual; `alumno` no entrega nada;
 - dos hilos en el foro: una duda sin responder y otra que un compañero ha contestado mal.
 
-Se puede ejecutar más de una vez: si ya está sembrada, no hace nada.
+Los tres comparten una contraseña que se guarda en `.env` (`MOODLE_SEEDED_STUDENTS_PASSWORD`) y
+aparece en `npm run info`, para poder entrar como cualquiera de ellos. Se puede ejecutar más de
+una vez: si ya está sembrada, solo repara lo que falte (entregas en borrador, contraseñas).
 
 ### Cursos vacíos para construir
 
@@ -95,7 +97,8 @@ error si el sandbox no está instalado, no está en marcha o falta el curso.
   "course": { "id": 2, "shortname": "sandbox-course" },
   "admin":   { "username": "admin",    "password": "..." },
   "teacher": { "username": "profesor", "password": "..." },
-  "student": { "username": "alumno",   "password": "..." } }
+  "student": { "username": "alumno",   "password": "..." },
+  "students": [ { "username": "lucia.martin", "password": "..." }, ... ] }
 ```
 
 Un agente debería depender solo de este comando, no de `.env` ni de la base de datos.

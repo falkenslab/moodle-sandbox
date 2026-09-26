@@ -53,8 +53,27 @@ function submit_drafts(stdClass $course): int {
     return $submitted;
 }
 
+/**
+ * Pone a los alumnos sembrados la contraseña de MOODLE_SEEDED_STUDENTS_PASSWORD (la guarda
+ * manage.mjs en .env y la publica `npm run info`), para poder entrar como cualquiera de ellos.
+ * Sin la variable, no toca nada.
+ */
+function set_known_passwords(): void {
+    global $DB;
+    $password = getenv('MOODLE_SEEDED_STUDENTS_PASSWORD');
+    if ($password === false || $password === '') {
+        return;
+    }
+    foreach (SUBMITTING_STUDENTS as $username) {
+        if ($user = $DB->get_record('user', ['username' => $username])) {
+            update_internal_user_password($user, $password);
+        }
+    }
+}
+
 if ($DB->record_exists('user', ['username' => 'lucia.martin'])) {
-    // Sembrada por una versión anterior que dejaba las entregas en borrador: se reparan.
+    // Sembrada por una versión anterior: entregas en borrador y contraseñas desconocidas.
+    set_known_passwords();
     $submitted = submit_drafts($course);
     cli_writeln($submitted > 0
         ? "La actividad ya estaba sembrada; se han enviado {$submitted} entregas que seguían en borrador."
@@ -155,6 +174,7 @@ foreach ($submissions as $username => $text) {
     ]);
 }
 submit_drafts($course);
+set_known_passwords();
 
 // --- Foro: una duda sin responder y otra con una respuesta incorrecta de un compañero ---
 $forumgenerator = $generator->get_plugin_generator('mod_forum');

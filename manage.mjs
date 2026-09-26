@@ -243,13 +243,24 @@ function runAdhocTasks() {
 
 /** Siembra, sobre el curso de pruebas, trabajo para un agente de profesor: contenido
  * coherente, tres alumnos más con entregas de calidad distinta y dudas en el foro. */
+/** Añade a .env una variable que falte (sin tocar las demás): .env nunca se reescribe. */
+function ensureEnvKey(name, value) {
+  if (readEnvFile()[name] !== undefined) return;
+  const raw = existsSync(envPath) ? readFileSync(envPath, "utf-8") : "";
+  const separator = raw === "" || raw.endsWith("\n") ? "" : "\n";
+  writeFileSync(envPath, `${raw}${separator}${name}=${value}\n`, "utf-8");
+}
+
 function activity() {
   if (!existsSync(activityScript)) {
     throw new Error(`No se encuentra ${activityScript}`);
   }
   copyFileSync(activityScript, path.join(srcDir, "seed-teacher-activity.php"));
   log("Sembrando actividad para el profesor (alumnos, entregas y dudas en el foro)...");
-  composeExec(["php", "seed-teacher-activity.php"]);
+  // Una contraseña conocida para los alumnos sembrados, para poder entrar como ellos.
+  ensureEnvKey("MOODLE_SEEDED_STUDENTS_PASSWORD", randomPassword());
+  composeExec(["env", `MOODLE_SEEDED_STUDENTS_PASSWORD=${readEnvFile().MOODLE_SEEDED_STUDENTS_PASSWORD}`,
+    "php", "seed-teacher-activity.php"]);
   runAdhocTasks();
 }
 
@@ -353,6 +364,10 @@ function info(args) {
     admin: { username: vars.MOODLE_ADMIN_USERNAME, password: vars.MOODLE_ADMIN_PASSWORD },
     teacher: { username: vars.MOODLE_TEACHER_USERNAME, password: vars.MOODLE_TEACHER_PASSWORD },
     student: { username: vars.MOODLE_STUDENT_USERNAME, password: vars.MOODLE_STUDENT_PASSWORD },
+    // The students seeded by `npm run activity` (empty until it has run).
+    students: vars.MOODLE_SEEDED_STUDENTS_PASSWORD
+      ? ["lucia.martin", "marcos.lopez", "sara.gil"].map((username) => ({ username, password: vars.MOODLE_SEEDED_STUDENTS_PASSWORD }))
+      : [],
   };
   if (json) {
     process.stdout.write(`${JSON.stringify(data, null, 2)}\n`);
@@ -363,6 +378,7 @@ function info(args) {
   console.log(`Admin:    ${data.admin.username} / ${data.admin.password}`);
   console.log(`Profesor: ${data.teacher.username} / ${data.teacher.password}`);
   console.log(`Alumno:   ${data.student.username} / ${data.student.password}`);
+  for (const s of data.students) console.log(`Alumno:   ${s.username} / ${s.password}`);
 }
 
 async function setup() {
