@@ -13,6 +13,7 @@
     "up": "node manage.mjs up",
     "down": "node manage.mjs down",
     "seed": "node manage.mjs seed",
+    "activity": "node manage.mjs activity",
     "status": "node manage.mjs status",
     "reset": "node manage.mjs reset"
   }

@@ -19,6 +19,7 @@ const moodleDir = path.dirname(fileURLToPath(import.meta.url));
 const srcDir = path.join(moodleDir, "src");
 const envPath = path.join(moodleDir, ".env");
 const seedScript = path.join(moodleDir, "seed", "seed-course.php");
+const activityScript = path.join(moodleDir, "seed", "seed-teacher-activity.php");
 
 const MOODLE_REPO = "https://github.com/moodle/moodle.git";
 const MOODLE_BRANCH = process.env.MOODLE_BRANCH || "MOODLE_502_STABLE";
@@ -228,6 +229,17 @@ function seed() {
   ]);
 }
 
+/** Siembra, sobre el curso de pruebas, trabajo para un agente de profesor: contenido
+ * coherente, tres alumnos más con entregas de calidad distinta y dudas en el foro. */
+function activity() {
+  if (!existsSync(activityScript)) {
+    throw new Error(`No se encuentra ${activityScript}`);
+  }
+  copyFileSync(activityScript, path.join(srcDir, "seed-teacher-activity.php"));
+  log("Sembrando actividad para el profesor (alumnos, entregas y dudas en el foro)...");
+  composeExec(["php", "seed-teacher-activity.php"]);
+}
+
 function down() {
   compose(["down"]);
 }
@@ -265,7 +277,7 @@ async function setup() {
   log(`  Alumno:   ${vars.MOODLE_STUDENT_USERNAME} / ${vars.MOODLE_STUDENT_PASSWORD}`);
 }
 
-const COMMANDS = { clone: ensureClone, env: ensureEnv, up, composer: composerInstall, install: installSite, seed, setup, down, reset, status };
+const COMMANDS = { clone: ensureClone, env: ensureEnv, up, composer: composerInstall, install: installSite, seed, activity, setup, down, reset, status };
 
 const [, , cmd, ...rest] = process.argv;
 if (!cmd || !(cmd in COMMANDS)) {
