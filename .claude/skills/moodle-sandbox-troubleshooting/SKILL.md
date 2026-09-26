@@ -49,6 +49,24 @@ out while building `manage.mjs`. Read this before touching the sandbox again.
   `npx @playwright/mcp` → Chromium tree also doesn't die with its parent — find and kill it
   by matching `CommandLine` via `Get-CimInstance Win32_Process` if it lingers after a run.
 
+- On Windows, the same bind-mount slowness hits `composer install`: unzipping one package
+  into `src/vendor/` can exceed Composer's default 300 s per-process timeout ("exceeded
+  the timeout of 300 seconds"), leaving a half-filled `vendor/`. `manage.mjs composer`
+  runs Composer with `COMPOSER_PROCESS_TIMEOUT=0` and only treats it as done once
+  `vendor/autoload.php` exists — checking `vendor/` alone skipped the half-done install on
+  retry, and seeding then failed on the missing autoloader.
+- Port 8080 may already be taken (e.g. another Moodle from an older compose project).
+  `MOODLE_SANDBOX_PORT` (environment or `.env`, which `docker compose` also reads) moves
+  the host port, and `manage.mjs` derives the site's `wwwroot` from it. Set it *before*
+  the first `install`: `wwwroot` is baked into `config.php` at install time.
+
+- The `mod_assign` generator creates assignments with `submissiondrafts = 1`, and its
+  `create_submission()` goes through `save_submission()`, which leaves the submission as a
+  **draft** whatever `status` it's given — so a teacher sees nothing to grade. Submit it the
+  way the student would: `\core\session\manager::set_user($student)` and
+  `$assign->submit_for_grading((object) ['userid' => $student->id], [])` (see
+  `submit_drafts()` in `seed/seed-teacher-activity.php`), then restore the admin user.
+
 If you learn a new one, add it here rather than to `CLAUDE.md` directly — this content is
 long and only relevant when someone is actually touching the sandbox, which is exactly what
 a skill (loaded on demand) is for instead of the always-loaded project file.
