@@ -262,6 +262,67 @@ function status() {
   compose(["ps"]);
 }
 
+/** La URL con la que se instaló el sitio (config.php manda: wwwroot queda fijado al
+ * instalar), o la que se usaría si aún no está instalado. */
+function installedWwwroot() {
+  const configPath = path.join(srcDir, "config.php");
+  if (existsSync(configPath)) {
+    const match = readFileSync(configPath, "utf-8").match(/\$CFG->wwwroot\s*=\s*'([^']+)'/);
+    if (match) return match[1];
+  }
+  return wwwroot();
+}
+
+function isRunning() {
+  const result = runCapture("docker", ["compose", "ps", "webserver", "--format", "{{.State}}"]);
+  return result.stdout?.trim() === "running";
+}
+
+function courseId() {
+  const result = runCapture("docker", [
+    "compose", "exec", "-T", "db", "psql", "-U", "moodle", "-d", "moodle",
+    "-tAc", "select id from mdl_course where shortname='sandbox-course'",
+  ]);
+  const id = Number(result.stdout?.trim());
+  return Number.isInteger(id) && id > 0 ? id : undefined;
+}
+
+/**
+ * El contrato para los agentes que usan el sandbox: URL, curso sembrado y credenciales,
+ * sin que tengan que leer .env ni consultar la base de datos. `--json` imprime solo el
+ * JSON en stdout; sin él, lo mismo legible. Sale con código 1 si el sandbox no está
+ * instalado, no está en marcha o el curso no está sembrado.
+ */
+function info(args) {
+  const json = args.includes("--json");
+  const fail = (message) => {
+    throw new Error(`${message} (npm run setup / npm run up)`);
+  };
+  if (!existsSync(envPath) || !existsSync(path.join(srcDir, "config.php"))) fail("El sandbox no está instalado.");
+  if (!isRunning()) fail("El sandbox está instalado pero no está en marcha.");
+  const id = courseId();
+  if (!id) fail('No se encuentra el curso "sandbox-course": falta sembrarlo.');
+
+  const vars = readEnvFile();
+  const data = {
+    url: installedWwwroot(),
+    running: true,
+    course: { id, shortname: "sandbox-course" },
+    admin: { username: vars.MOODLE_ADMIN_USERNAME, password: vars.MOODLE_ADMIN_PASSWORD },
+    teacher: { username: vars.MOODLE_TEACHER_USERNAME, password: vars.MOODLE_TEACHER_PASSWORD },
+    student: { username: vars.MOODLE_STUDENT_USERNAME, password: vars.MOODLE_STUDENT_PASSWORD },
+  };
+  if (json) {
+    process.stdout.write(`${JSON.stringify(data, null, 2)}\n`);
+    return;
+  }
+  console.log(`URL:      ${data.url}`);
+  console.log(`Curso:    ${data.course.shortname} (id ${data.course.id}) → ${data.url}/course/view.php?id=${data.course.id}`);
+  console.log(`Admin:    ${data.admin.username} / ${data.admin.password}`);
+  console.log(`Profesor: ${data.teacher.username} / ${data.teacher.password}`);
+  console.log(`Alumno:   ${data.student.username} / ${data.student.password}`);
+}
+
 async function setup() {
   ensureEnv();
   ensureClone();
@@ -277,7 +338,7 @@ async function setup() {
   log(`  Alumno:   ${vars.MOODLE_STUDENT_USERNAME} / ${vars.MOODLE_STUDENT_PASSWORD}`);
 }
 
-const COMMANDS = { clone: ensureClone, env: ensureEnv, up, composer: composerInstall, install: installSite, seed, activity, setup, down, reset, status };
+const COMMANDS = { clone: ensureClone, env: ensureEnv, up, composer: composerInstall, install: installSite, seed, activity, setup, down, reset, status, info };
 
 const [, , cmd, ...rest] = process.argv;
 if (!cmd || !(cmd in COMMANDS)) {
