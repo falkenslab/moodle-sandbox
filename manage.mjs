@@ -22,7 +22,6 @@ const seedScript = path.join(moodleDir, "seed", "seed-course.php");
 
 const MOODLE_REPO = "https://github.com/moodle/moodle.git";
 const MOODLE_BRANCH = process.env.MOODLE_BRANCH || "MOODLE_502_STABLE";
-const WWWROOT = process.env.MOODLE_SANDBOX_URL || "http://localhost:8080";
 
 function log(msg) {
   console.log(`[moodle] ${msg}`);
@@ -68,13 +67,25 @@ function readEnvFile() {
   return vars;
 }
 
+/** Puerto del host: MOODLE_SANDBOX_PORT del entorno o de .env (docker compose también
+ * lo lee de .env), 8080 por defecto. */
+function sandboxPort() {
+  return process.env.MOODLE_SANDBOX_PORT || readEnvFile().MOODLE_SANDBOX_PORT || "8080";
+}
+
+/** URL del sitio: MOODLE_SANDBOX_URL si se da, si no localhost con el puerto del sandbox. */
+function wwwroot() {
+  return process.env.MOODLE_SANDBOX_URL || `http://localhost:${sandboxPort()}`;
+}
+
 /** Crea .env con contraseñas aleatorias si no existe todavía. Nunca lo sobrescribe. */
 function ensureEnv() {
   if (existsSync(envPath)) {
     log(".env ya existe, no se toca.");
     return;
   }
-  const content = `MOODLE_DB_PASSWORD=${randomPassword()}
+  const content = `MOODLE_SANDBOX_PORT=${sandboxPort()}
+MOODLE_DB_PASSWORD=${randomPassword()}
 MOODLE_ADMIN_USERNAME=admin
 MOODLE_ADMIN_PASSWORD=${randomPassword()}
 MOODLE_ADMIN_EMAIL=admin@example.com
@@ -167,7 +178,7 @@ function installSite() {
     composeExec([
       "php", "admin/cli/install.php",
       "--non-interactive", "--agree-license",
-      `--wwwroot=${WWWROOT}`,
+      `--wwwroot=${wwwroot()}`,
       "--dbtype=pgsql", "--dbhost=db", "--dbname=moodle", "--dbuser=moodle",
       `--dbpass=${vars.MOODLE_DB_PASSWORD ?? ""}`, "--dbport=5432",
       `--fullname=${vars.MOODLE_SITE_NAME ?? "Moodle Sandbox"}`, "--shortname=sandbox",
@@ -248,7 +259,7 @@ async function setup() {
   seed();
   const vars = readEnvFile();
   log("Sandbox listo:");
-  log(`  URL: ${WWWROOT}`);
+  log(`  URL: ${wwwroot()}`);
   log(`  Admin:    ${vars.MOODLE_ADMIN_USERNAME} / ${vars.MOODLE_ADMIN_PASSWORD}`);
   log(`  Profesor: ${vars.MOODLE_TEACHER_USERNAME} / ${vars.MOODLE_TEACHER_PASSWORD}`);
   log(`  Alumno:   ${vars.MOODLE_STUDENT_USERNAME} / ${vars.MOODLE_STUDENT_PASSWORD}`);
