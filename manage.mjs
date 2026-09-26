@@ -227,6 +227,17 @@ function seed() {
     `MOODLE_STUDENT_EMAIL=${vars.MOODLE_STUDENT_EMAIL ?? "alumno@example.com"}`,
     "php", "seed-course.php",
   ]);
+  runAdhocTasks();
+}
+
+/**
+ * Ejecuta las tareas ad hoc pendientes de Moodle. El sandbox no tiene cron, y en Moodle 5
+ * algunas son imprescindibles: sin transfer_question_categories/transfer_questions, el
+ * banco de preguntas del curso queda bloqueado ("Create a new question" no aparece).
+ */
+function runAdhocTasks() {
+  log("Ejecutando las tareas pendientes de Moodle (no hay cron en el sandbox)...");
+  composeExec(["php", "admin/cli/adhoc_task.php", "--execute"]);
 }
 
 /** Siembra, sobre el curso de pruebas, trabajo para un agente de profesor: contenido
@@ -238,6 +249,7 @@ function activity() {
   copyFileSync(activityScript, path.join(srcDir, "seed-teacher-activity.php"));
   log("Sembrando actividad para el profesor (alumnos, entregas y dudas en el foro)...");
   composeExec(["php", "seed-teacher-activity.php"]);
+  runAdhocTasks();
 }
 
 function down() {
@@ -338,7 +350,7 @@ async function setup() {
   log(`  Alumno:   ${vars.MOODLE_STUDENT_USERNAME} / ${vars.MOODLE_STUDENT_PASSWORD}`);
 }
 
-const COMMANDS = { clone: ensureClone, env: ensureEnv, up, composer: composerInstall, install: installSite, seed, activity, setup, down, reset, status, info };
+const COMMANDS = { clone: ensureClone, env: ensureEnv, up, composer: composerInstall, install: installSite, seed, activity, setup, down, reset, status, info, tasks: runAdhocTasks };
 
 const [, , cmd, ...rest] = process.argv;
 if (!cmd || !(cmd in COMMANDS)) {

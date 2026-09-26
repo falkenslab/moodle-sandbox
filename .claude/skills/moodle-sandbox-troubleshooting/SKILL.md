@@ -67,6 +67,13 @@ out while building `manage.mjs`. Read this before touching the sandbox again.
   `$assign->submit_for_grading((object) ['userid' => $student->id], [])` (see
   `submit_drafts()` in `seed/seed-teacher-activity.php`), then restore the admin user.
 
+- There's no cron in the sandbox, and Moodle 5 depends on ad-hoc tasks right after install:
+  until `mod_qbank	ask	ransfer_question_categories` (and the `transfer_questions` it
+  queues) run, the course question bank refuses to manage questions — "Create a new question"
+  just isn't there, which an agent reads as "this Moodle can't create questions". `seed` and
+  `activity` now end with `admin/cli/adhoc_task.php --execute` (`npm run tasks` on its own);
+  it takes a minute or two on Windows.
+
 If you learn a new one, add it here rather than to `CLAUDE.md` directly — this content is
 long and only relevant when someone is actually touching the sandbox, which is exactly what
 a skill (loaded on demand) is for instead of the always-loaded project file.

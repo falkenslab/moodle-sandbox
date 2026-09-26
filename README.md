@@ -36,6 +36,7 @@ npm run status        # estado de los contenedores
 npm run seed          # vuelve a sembrar el curso de pruebas (no hace nada si ya existe)
 npm run activity      # añade trabajo para un agente de profesor (ver más abajo)
 npm run info          # URL, id del curso y credenciales (con -- --json, para agentes)
+npm run tasks         # ejecuta las tareas pendientes de Moodle (el sandbox no tiene cron)
 npm run reset -- --yes   # borra todo (contenedores, datos y código de Moodle) para empezar de cero
 ```
 

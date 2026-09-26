@@ -16,6 +16,7 @@
     "activity": "node manage.mjs activity",
     "status": "node manage.mjs status",
     "info": "node manage.mjs info",
+    "tasks": "node manage.mjs tasks",
     "reset": "node manage.mjs reset"
   }
 }
