@@ -1,6 +1,6 @@
-# Nombre fijo del proyecto: los contenedores y volúmenes no dependen de cómo se llame
-# la carpeta del clon.
-name: moodle-sandbox
+# Nombre del proyecto: no depende de cómo se llame la carpeta del clon. Una segunda
+# instancia (otra versión de Moodle, en otro clon) lleva otro en MOODLE_SANDBOX_NAME (.env).
+name: ${MOODLE_SANDBOX_NAME:-moodle-sandbox}
 
 services:
   db:
@@ -28,7 +28,9 @@ services:
       # MOODLE_SANDBOX_PORT se puede fijar en .env si el 8080 ya está ocupado.
       - "${MOODLE_SANDBOX_PORT:-8080}:80"
     environment:
-      - APACHE_DOCUMENT_ROOT=/var/www/html/public
+      # Moodle 5.1+ sirve la web desde public/; hasta 5.0, desde la raíz. manage.mjs lo
+      # deduce del código clonado (MOODLE_DOCROOT).
+      - APACHE_DOCUMENT_ROOT=${MOODLE_DOCROOT:-/var/www/html/public}
     volumes:
       - ./src:/var/www/html
       - moodledata_data:/var/www/moodledata

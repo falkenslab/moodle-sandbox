@@ -6,7 +6,7 @@
  * Git Bash reescribiendo argumentos que parecen rutas absolutas de Unix
  * (`/var/www/html`, etc.) al pasarlos a `docker compose exec`.
  *
- * Uso: node manage.mjs <clone|env|up|composer|install|seed|setup|down|reset|status>
+ * Uso: node manage.mjs <clone|env|up|composer|install|seed|setup|down|reset|status|info|tasks|course|theme>
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, rmSync, copyFileSync, writeFileSync, readFileSync, chmodSync } from "node:fs";
@@ -23,14 +23,20 @@ const activityScript = path.join(moodleDir, "seed", "seed-teacher-activity.php")
 const emptyCourseScript = path.join(moodleDir, "seed", "seed-empty-course.php");
 
 const MOODLE_REPO = "https://github.com/moodle/moodle.git";
-const MOODLE_BRANCH = process.env.MOODLE_BRANCH || "MOODLE_502_STABLE";
+const MOODLE_BRANCH = process.env.MOODLE_BRANCH || readEnvBranch() || "MOODLE_502_STABLE";
+
+/** La rama con la que se instaló (MOODLE_BRANCH en .env), antes de que existan las funciones de .env. */
+function readEnvBranch() {
+  const file = path.join(path.dirname(fileURLToPath(import.meta.url)), ".env");
+  return existsSync(file) ? readFileSync(file, "utf-8").match(/^MOODLE_BRANCH=(.+)$/m)?.[1]?.trim() : undefined;
+}
 
 function log(msg) {
   console.log(`[moodle] ${msg}`);
 }
 
 function run(cmd, args, opts = {}) {
-  const result = spawnSync(cmd, args, { stdio: "inherit", cwd: moodleDir, ...opts });
+  const result = spawnSync(cmd, args, { stdio: "inherit", cwd: moodleDir, env: dockerEnv(), ...opts });
   if (result.error) throw result.error;
   if (result.status !== 0) {
     throw new Error(`"${cmd} ${args.join(" ")}" salió con código ${result.status}`);
@@ -38,7 +44,21 @@ function run(cmd, args, opts = {}) {
 }
 
 function runCapture(cmd, args, opts = {}) {
-  return spawnSync(cmd, args, { cwd: moodleDir, encoding: "utf-8", ...opts });
+  return spawnSync(cmd, args, { cwd: moodleDir, encoding: "utf-8", env: dockerEnv(), ...opts });
+}
+
+/** La raíz web del contenedor: public/ desde Moodle 5.1, la raíz del código hasta 5.0
+ * (MOODLE_BRANCH=MOODLE_405_STABLE). Se deduce del código clonado, así que vale para un
+ * sandbox ya instalado sin tocar su .env. */
+function docroot() {
+  return existsSync(path.join(srcDir, "public")) || !existsSync(path.join(srcDir, "version.php"))
+    ? "/var/www/html/public"
+    : "/var/www/html";
+}
+
+/** El entorno de cada orden: el del proceso más la raíz web, que docker compose interpola. */
+function dockerEnv() {
+  return { ...process.env, MOODLE_DOCROOT: docroot() };
 }
 
 function compose(args) {
@@ -87,6 +107,8 @@ function ensureEnv() {
     return;
   }
   const content = `MOODLE_SANDBOX_PORT=${sandboxPort()}
+MOODLE_SANDBOX_NAME=${process.env.MOODLE_SANDBOX_NAME || "moodle-sandbox"}
+MOODLE_BRANCH=${MOODLE_BRANCH}
 MOODLE_DB_PASSWORD=${randomPassword()}
 MOODLE_ADMIN_USERNAME=admin
 MOODLE_ADMIN_PASSWORD=${randomPassword()}
@@ -118,7 +140,9 @@ function ensureClone() {
   }
   mkdirSync(srcDir, { recursive: true });
   log(`Clonando ${MOODLE_REPO} (rama ${MOODLE_BRANCH}, shallow) en src/ — puede tardar unos minutos...`);
-  run("git", ["clone", "--depth", "1", "--branch", MOODLE_BRANCH, MOODLE_REPO, "src"]);
+  // core.longpaths: en Windows, rutas de Moodle como lib/editor/atto/plugins/.../yui/build/...
+  // pasan de 260 caracteres en cuanto la carpeta del clon no está en la raíz del disco.
+  run("git", ["clone", "--depth", "1", "--config", "core.longpaths=true", "--branch", MOODLE_BRANCH, MOODLE_REPO, "src"]);
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -360,6 +384,7 @@ function info(args) {
   const data = {
     url: installedWwwroot(),
     running: true,
+    moodle: { release: moodleRelease(), branch: vars.MOODLE_BRANCH ?? MOODLE_BRANCH, theme: siteTheme() },
     course: { id, shortname: "sandbox-course" },
     admin: { username: vars.MOODLE_ADMIN_USERNAME, password: vars.MOODLE_ADMIN_PASSWORD },
     teacher: { username: vars.MOODLE_TEACHER_USERNAME, password: vars.MOODLE_TEACHER_PASSWORD },
@@ -374,11 +399,34 @@ function info(args) {
     return;
   }
   console.log(`URL:      ${data.url}`);
+  console.log(`Moodle:   ${data.moodle.release} · tema ${data.moodle.theme}`);
   console.log(`Curso:    ${data.course.shortname} (id ${data.course.id}) → ${data.url}/course/view.php?id=${data.course.id}`);
   console.log(`Admin:    ${data.admin.username} / ${data.admin.password}`);
   console.log(`Profesor: ${data.teacher.username} / ${data.teacher.password}`);
   console.log(`Alumno:   ${data.student.username} / ${data.student.password}`);
   for (const s of data.students) console.log(`Alumno:   ${s.username} / ${s.password}`);
+}
+
+/** La versión de Moodle del código instalado ("4.5.15 (Build: 20261005)"). */
+function moodleRelease() {
+  const file = [path.join(srcDir, "public", "version.php"), path.join(srcDir, "version.php")].find(existsSync);
+  return file ? readFileSync(file, "utf-8").match(/\$release\s*=\s*'([^']+)'/)?.[1] : undefined;
+}
+
+/** El tema del sitio (boost, classic...). */
+function siteTheme() {
+  const result = runCapture("docker", ["compose", "exec", "-T", "webserver", "php", "admin/cli/cfg.php", "--name=theme"]);
+  return result.stdout?.trim() || undefined;
+}
+
+/** Cambia el tema del sitio (boost o classic) y vacía las cachés. La primera página
+ * después tarda: compila el CSS del tema. */
+function theme(args) {
+  const [name] = args;
+  if (!["boost", "classic"].includes(name)) throw new Error("Uso: npm run theme -- boost|classic");
+  composeExec(["php", "admin/cli/cfg.php", "--name=theme", `--set=${name}`]);
+  composeExec(["php", "admin/cli/purge_caches.php"]);
+  log(`Tema del sitio: ${name}.`);
 }
 
 async function setup() {
@@ -396,7 +444,7 @@ async function setup() {
   log(`  Alumno:   ${vars.MOODLE_STUDENT_USERNAME} / ${vars.MOODLE_STUDENT_PASSWORD}`);
 }
 
-const COMMANDS = { clone: ensureClone, env: ensureEnv, up, composer: composerInstall, install: installSite, seed, activity, setup, down, reset, status, info, tasks: runAdhocTasks, course };
+const COMMANDS = { clone: ensureClone, env: ensureEnv, up, composer: composerInstall, install: installSite, seed, activity, setup, down, reset, status, info, tasks: runAdhocTasks, course, theme };
 
 const [, , cmd, ...rest] = process.argv;
 if (!cmd || !(cmd in COMMANDS)) {
