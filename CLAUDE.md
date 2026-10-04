@@ -15,6 +15,7 @@ npm run seed             # re-seed the demo course (no-op if it already exists)
 npm run activity         # teacher workload on top of it: students, submissions, forum doubts
 npm run info -- --json   # the agents' contract: url, course id, credentials (exit 1 if not ready)
 npm run course -- <short> ["Full name"] --json   # an empty course with the teacher and students enrolled
+npm run theme -- classic|boost   # the site theme, caches purged
 npm run reset -- --yes   # wipes containers, volumes, src/ and .env
 ```
 
@@ -23,7 +24,7 @@ npm run reset -- --yes   # wipes containers, volumes, src/ and .env
 ## Layout
 
 - `manage.mjs` — the whole lifecycle; one function per step.
-- `docker-compose.yml` — Postgres 17 + `moodlehq/moodle-php-apache`, fixed project name `moodle-sandbox`, port 8080, the Moodle checkout bind-mounted from `src/`.
+- `docker-compose.yml` — Postgres 17 + `moodlehq/moodle-php-apache`, project name `moodle-sandbox` unless `MOODLE_SANDBOX_NAME` says otherwise (a second instance, another Moodle version, in another clone), port 8080, the Moodle checkout bind-mounted from `src/`, web root `public/` from Moodle 5.1 and the checkout's root up to 5.0 (`MOODLE_DOCROOT`, deduced by `manage.mjs` from the checkout).
 - `seed/seed-teacher-activity.php` — turns the demo course into a teacher's workload: coherent content, three more students whose submissions (good, thin, conceptually wrong) are *submitted*, and forum threads (one unanswered, one answered wrongly by a classmate). Idempotent; copied into `src/` like the course seed.
 - `info` in `manage.mjs` — the contract other agents depend on (student-agent's and teacher-agent's `sandbox-e2e` skills): keep its JSON shape stable, and add fields rather than renaming them.
 - `seed/seed-course.php` — the durable, versioned source of the demo course (teacher, student, page, quiz, assignment, forum). `manage.mjs seed` copies it into `src/` before running it, because `src/` is disposable and anything living only there is lost on the next re-clone.

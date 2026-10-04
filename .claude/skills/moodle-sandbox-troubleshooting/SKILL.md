@@ -15,6 +15,15 @@ out while building `manage.mjs`. Read this before touching the sandbox again.
   compose file mounts the *whole* checkout at `/var/www/html` and sets
   `APACHE_DOCUMENT_ROOT=/var/www/html/public` rather than mounting `public/` alone,
   because CLI scripts still need the full tree next to `public/`.
+- Up to Moodle 5.0 (e.g. `MOODLE_BRANCH=MOODLE_405_STABLE`) there's no `public/`: the web
+  root is the checkout itself. `manage.mjs` passes `MOODLE_DOCROOT` to every `docker compose`
+  call from what the checkout has, so the same compose file serves both.
+- On Windows, cloning Moodle into a folder that isn't near the drive's root fails half way
+  ("Filename too long", "unable to checkout working tree") on paths like
+  `lib/editor/atto/plugins/.../yui/build/...`: the clone sets `core.longpaths=true`. A
+  half-checked-out `src/` is fixed with `git -c core.longpaths=true checkout -f HEAD` inside it.
+- Two sandboxes at once need different project names (`MOODLE_SANDBOX_NAME`), or the second
+  `up` takes over the first one's containers and volumes.
 - `admin/cli/install.php` writes `config.php` as `640 root:root`, which Apache's `www-data`
   can't read — `chmod 644` it after install or every page 500s.
 - Adding quiz questions with the core `quiz_add_quiz_question()` function does **not**

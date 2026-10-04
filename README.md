@@ -38,14 +38,17 @@ npm run activity      # añade trabajo para un agente de profesor (ver más abaj
 npm run info          # URL, id del curso y credenciales (con -- --json, para agentes)
 npm run tasks         # ejecuta las tareas pendientes de Moodle (el sandbox no tiene cron)
 npm run course -- <nombre-corto> ["Nombre completo"] [--json]   # crea un curso vacío (ver abajo)
+npm run theme -- classic|boost   # cambia el tema del sitio y vacía las cachés
 npm run reset -- --yes   # borra todo (contenedores, datos y código de Moodle) para empezar de cero
 ```
 
 `reset` es destructivo: pide `--yes` a propósito para no borrar nada sin querer.
 
 Variables de entorno opcionales: `MOODLE_BRANCH` (rama de Moodle a clonar, por defecto
-`MOODLE_502_STABLE`), `MOODLE_SANDBOX_PORT` (puerto del sitio, por defecto `8080`) y
-`MOODLE_SANDBOX_URL` (URL completa del sitio, por defecto `http://localhost:<puerto>`).
+`MOODLE_502_STABLE`), `MOODLE_SANDBOX_PORT` (puerto del sitio, por defecto `8080`),
+`MOODLE_SANDBOX_URL` (URL completa del sitio, por defecto `http://localhost:<puerto>`) y
+`MOODLE_SANDBOX_NAME` (nombre del proyecto de Docker, por defecto `moodle-sandbox`). La rama, el
+puerto y el nombre se guardan en `.env` al instalar.
 
 Si el 8080 ya está ocupado (por ejemplo, por otro Moodle), elige otro puerto **antes** de la
 primera instalación, porque la URL queda fijada al instalar:
@@ -55,6 +58,21 @@ MOODLE_SANDBOX_PORT=8081 npm run setup
 ```
 
 El puerto se guarda en `.env`, así que los demás comandos ya lo usan sin repetirlo.
+
+### Otra versión de Moodle a la vez
+
+Para tener, por ejemplo, un Moodle 4.5 junto al 5.2, clona este repo en otra carpeta e
+instálalo con su rama, su puerto y su propio nombre de proyecto (si no, los dos compartirían
+contenedores y volúmenes):
+
+```bash
+git clone https://github.com/falkenslab/moodle-sandbox moodle-sandbox-45
+cd moodle-sandbox-45
+MOODLE_BRANCH=MOODLE_405_STABLE MOODLE_SANDBOX_PORT=8082 MOODLE_SANDBOX_NAME=moodle-sandbox-45 npm run setup
+```
+
+Hasta Moodle 5.0 la web se sirve desde la raíz del código y desde 5.1 desde `public/`:
+`manage.mjs` lo deduce del código clonado. `npm run info` dice la versión, la rama y el tema.
 
 ## El curso de pruebas
 
