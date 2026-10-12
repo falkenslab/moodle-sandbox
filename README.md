@@ -13,10 +13,10 @@ ya creadas, y un cuestionario, una tarea y un foro listos para usar desde los do
 ## Uso
 
 ```bash
-npm run setup     # deja todo listo: descarga, levanta e instala el sitio y el curso de pruebas
+npm run setup     # deja todo listo: construye la imagen de Moodle, levanta e instala el sitio y el curso de pruebas
 ```
 
-La primera vez tarda bastante (puede ser media hora o más, sobre todo en Windows). Es
+La primera vez tarda unos minutos: construye la imagen de Docker con el código de Moodle dentro. Es
 seguro volver a ejecutarlo si se interrumpe o falla a mitad: cada paso se salta solo si ya
 está hecho.
 
@@ -38,17 +38,19 @@ npm run activity      # añade trabajo para un agente de profesor (ver más abaj
 npm run info          # URL, id del curso y credenciales (con -- --json, para agentes)
 npm run tasks         # ejecuta las tareas pendientes de Moodle (el sandbox no tiene cron)
 npm run course -- <nombre-corto> ["Nombre completo"] [--json]   # crea un curso vacío (ver abajo)
-npm run reset -- --yes   # borra todo (contenedores, datos y código de Moodle) para empezar de cero
+npm run build            # reconstruye la imagen de Moodle (lo último de su rama); luego `npm run up`
+npm run reset -- --yes   # borra el sitio (contenedores, base de datos, moodledata y .env) para empezar de cero
 ```
 
 `reset` es destructivo: pide `--yes` a propósito para no borrar nada sin querer.
 
-Variables de entorno opcionales: `MOODLE_BRANCH` (rama de Moodle a clonar, por defecto
+Variables de entorno opcionales: `MOODLE_BRANCH` (rama de Moodle de la imagen, por defecto
 `MOODLE_502_STABLE`), `MOODLE_SANDBOX_PORT` (puerto del sitio, por defecto `8080`) y
 `MOODLE_SANDBOX_URL` (URL completa del sitio, por defecto `http://localhost:<puerto>`).
 
-Si el 8080 ya está ocupado (por ejemplo, por otro Moodle), elige otro puerto **antes** de la
-primera instalación, porque la URL queda fijada al instalar:
+Si el 8080 ya está ocupado (por ejemplo, por otro Moodle), elige otro puerto, mejor
+antes de la primera instalación (los enlaces que Moodle guarda en los contenidos conservan
+el puerto con el que se crearon):
 
 ```bash
 MOODLE_SANDBOX_PORT=8081 npm run setup
@@ -107,11 +109,13 @@ Un agente debería depender solo de este comando, no de `.env` ni de la base de 
 
 ```
 ├── manage.mjs           # el script detrás de los comandos npm
-├── docker-compose.yml   # Postgres + Moodle (proyecto Docker "moodle-sandbox")
+├── Dockerfile           # la imagen: Moodle con su código y dependencias dentro
+├── docker/config.php    # el config.php de la imagen (lee la contraseña y la URL del entorno)
+├── php/zz-sandbox.ini   # PHP ajustado para Moodle (opcache)
+├── docker-compose.yml   # Postgres, Moodle y su cron (proyecto Docker "moodle-sandbox")
 ├── seed/
 │   ├── seed-course.php  # crea el curso, el profesor, el alumno y las actividades
 │   ├── seed-teacher-activity.php  # alumnos, entregas y dudas para un agente de profesor
 │   └── seed-empty-course.php     # curso vacío para construir (npm run course)
-├── .env                 # credenciales generadas (se crea solo, no se sube al repo)
-└── src/                 # código de Moodle descargado (se crea solo, no se sube al repo)
+└── .env                 # credenciales generadas (se crea solo, no se sube al repo)
 ```

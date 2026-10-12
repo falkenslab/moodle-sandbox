@@ -9,13 +9,14 @@ A disposable, Docker-based Moodle 5.x instance with a seeded demo course, used t
 ## Commands
 
 ```
-npm run setup            # env + clone + up + composer + install + seed, all idempotent
+npm run setup            # env + up (builds the image if missing) + install + seed, all idempotent
+npm run build            # rebuild the Moodle image (latest of MOODLE_BRANCH); `up` then recreates the containers
 npm run up | down | status
 npm run seed             # re-seed the demo course (no-op if it already exists)
 npm run activity         # teacher workload on top of it: students, submissions, forum doubts
 npm run info -- --json   # the agents' contract: url, course id, credentials (exit 1 if not ready)
 npm run course -- <short> ["Full name"] --json   # an empty course with the teacher and students enrolled
-npm run reset -- --yes   # wipes containers, volumes, src/ and .env
+npm run reset -- --yes   # wipes containers, volumes (the whole site) and .env; keeps the image
 ```
 
 `manage.mjs` (plain Node, no dependencies) resolves every path relative to its own folder and spawns `docker`/`git` through `child_process`, so Git Bash never rewrites container paths like `/var/www/html` on Windows. Each `setup` step skips work already done, so re-running after a partial run is safe.
@@ -23,11 +24,12 @@ npm run reset -- --yes   # wipes containers, volumes, src/ and .env
 ## Layout
 
 - `manage.mjs` — the whole lifecycle; one function per step.
-- `docker-compose.yml` — Postgres 17 + `moodlehq/moodle-php-apache`, fixed project name `moodle-sandbox`, port 8080, the Moodle checkout bind-mounted from `src/`.
-- `seed/seed-teacher-activity.php` — turns the demo course into a teacher's workload: coherent content, three more students whose submissions (good, thin, conceptually wrong) are *submitted*, and forum threads (one unanswered, one answered wrongly by a classmate). Idempotent; copied into `src/` like the course seed.
+- `Dockerfile` — the sandbox's image: `moodlehq/moodle-php-apache` with Moodle's code (a shallow clone of `MOODLE_BRANCH`, `MOODLE_502_STABLE` by default) and its Composer dependencies (dev included: the seeds use Moodle's data generators) inside, `docker/config.php` (database password and URL from the environment) and `php/zz-sandbox.ini` (an opcache sized for Moodle's ~58000 PHP files, no per-request file checks). No bind mount of the code: through Docker Desktop on Windows it made every page several times slower. A new Moodle is a new image (`npm run build`); the site's data stays in its volumes.
+- `docker-compose.yml` — fixed project name `moodle-sandbox`, port 8080: Postgres 17 tuned for a disposable site (`fsync=off`, `synchronous_commit=off`: fast writes, but a power cut or a hard Docker stop can corrupt it; `reset` and `setup` rebuild it), the webserver, and a `cron` container running Moodle's cron every minute (scheduled and ad hoc tasks: backups, course copies, restores, notifications), all from the same image.
+- `seed/seed-teacher-activity.php` — turns the demo course into a teacher's workload: coherent content, three more students whose submissions (good, thin, conceptually wrong) are *submitted*, and forum threads (one unanswered, one answered wrongly by a classmate). Idempotent; copied into the container like the course seed.
 - `info` in `manage.mjs` — the contract other agents depend on (student-agent's and teacher-agent's `sandbox-e2e` skills): keep its JSON shape stable, and add fields rather than renaming them.
-- `seed/seed-course.php` — the durable, versioned source of the demo course (teacher, student, page, quiz, assignment, forum). `manage.mjs seed` copies it into `src/` before running it, because `src/` is disposable and anything living only there is lost on the next re-clone.
-- `src/` (Moodle core clone) and `.env` (generated passwords) are gitignored and disposable; `.env` is never overwritten once generated.
+- `seed/seed-course.php` — the durable, versioned source of the demo course (teacher, student, page, quiz, assignment, forum). `manage.mjs seed` copies it into the webserver's code (next to `config.php`, which the seeds require by `__DIR__`) before running it: the container's code is disposable, rebuilt from the image.
+- `.env` (generated passwords) is gitignored and never overwritten once generated. `src/`, the Moodle checkout bind-mounted before the image existed, is no longer used (gitignored; `reset` deletes it).
 
 ## Before touching the sandbox
 

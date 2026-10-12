@@ -12,11 +12,13 @@ out while building `manage.mjs`. Read this before touching the sandbox again.
   official `moodlehq/moodle-php-apache` image plus a shallow clone of Moodle core.
 - Moodle 5.x restructured the repo: the actual web docroot is `<checkout>/public`, while
   `config.php` and the CLI scripts under `admin/cli/` stay at the checkout root. The
-  compose file mounts the *whole* checkout at `/var/www/html` and sets
-  `APACHE_DOCUMENT_ROOT=/var/www/html/public` rather than mounting `public/` alone,
-  because CLI scripts still need the full tree next to `public/`.
+  image holds the *whole* checkout at `/var/www/html` and sets
+  `APACHE_DOCUMENT_ROOT=/var/www/html/public`, because CLI scripts still need the full
+  tree next to `public/`.
 - `admin/cli/install.php` writes `config.php` as `640 root:root`, which Apache's `www-data`
-  can't read — `chmod 644` it after install or every page 500s.
+  can't read. The image ships its own `config.php` (`docker/config.php`, readable, the
+  database password and URL from the environment), so the install only runs
+  `admin/cli/install_database.php`.
 - Adding quiz questions with the core `quiz_add_quiz_question()` function does **not**
   recompute the quiz's total grade. Without an explicit
   `\mod_quiz\grade_calculator::create($quizobj)->recompute_quiz_sumgrades()` call
@@ -24,22 +26,19 @@ out while building `manage.mjs`. Read this before touching the sandbox again.
   `seed/seed-course.php` already does this; keep the pattern if adding more quizzes.
 - The question-bank generator (`core_question_generator::create_question()`) transitively
   requires PHPUnit (`question/engine/tests/helpers.php`), which isn't in this image by
-  default — Composer with dev dependencies has to be installed once inside the container
-  first. Composer itself isn't in the image either (`manage.mjs composer` downloads
-  `composer.phar` straight into `src/`, i.e. the bind mount, so it survives container
-  recreation instead of being reinstalled every time).
-- `config.php` existing does **not** mean the database is installed — `docker compose down
-  -v` wipes the Postgres volume but leaves `src/` (and its `config.php`) untouched, so a
-  fresh volume paired with a stale `config.php` makes `admin/cli/install.php` refuse to run
-  ("config.php already exists") while the database has nothing in it. `manage.mjs install`
-  checks for this explicitly (queries `information_schema.tables` for `mdl_config`) and
-  falls back to `admin/cli/install_database.php` — which reuses the existing `config.php`
-  instead of writing a new one — rather than assuming `config.php`'s presence means done.
-- On Windows, Docker Desktop's bind-mount I/O for the `./src:/var/www/html` mount (tens of
-  thousands of small PHP files) is slow enough that `admin/cli/install.php`/
-  `install_database.php` can take **much** longer than the few minutes it'd take natively —
-  tens of minutes is normal, not a hang. `manage.mjs` doesn't try to work around this; it
-  just runs the command and waits.
+  default: the sandbox's image runs `composer install` with dev dependencies when it's
+  built (see `Dockerfile`).
+- `config.php` existing does **not** mean the database is installed: it's always in the
+  image. `manage.mjs install` checks the database itself (queries
+  `information_schema.tables` for `mdl_config`) and runs `admin/cli/install_database.php`
+  only when it's empty.
+- Don't bind-mount Moodle's code from the host. On Windows, Docker Desktop's bind-mount I/O
+  for tens of thousands of small PHP files made `install.php` take tens of minutes, made
+  `composer install` exceed its 300 s per-process timeout, and made every page take
+  seconds (a login page 9–10 s with a few test runs on it). That's why the code lives in the
+  image (`Dockerfile`), with an opcache sized for it (`php/zz-sandbox.ini`: Moodle 5.2 has
+  ~58000 PHP files, the default opcache holds 10000 and kept recompiling). A new Moodle is
+  `npm run build` and `npm run up`.
 - Killing a background `docker compose exec ... php ...` process (e.g. via a task-runner's
   "stop task", or a shell timeout) does not kill the process inside the container — it
   keeps running server-side detached from whatever spawned it (confirmed by watching it in
@@ -49,16 +48,19 @@ out while building `manage.mjs`. Read this before touching the sandbox again.
   `npx @playwright/mcp` → Chromium tree also doesn't die with its parent — find and kill it
   by matching `CommandLine` via `Get-CimInstance Win32_Process` if it lingers after a run.
 
-- On Windows, the same bind-mount slowness hits `composer install`: unzipping one package
-  into `src/vendor/` can exceed Composer's default 300 s per-process timeout ("exceeded
-  the timeout of 300 seconds"), leaving a half-filled `vendor/`. `manage.mjs composer`
-  runs Composer with `COMPOSER_PROCESS_TIMEOUT=0` and only treats it as done once
-  `vendor/autoload.php` exists — checking `vendor/` alone skipped the half-done install on
-  retry, and seeding then failed on the missing autoloader.
 - Port 8080 may already be taken (e.g. another Moodle from an older compose project).
   `MOODLE_SANDBOX_PORT` (environment or `.env`, which `docker compose` also reads) moves
-  the host port, and `manage.mjs` derives the site's `wwwroot` from it. Set it *before*
-  the first `install`: `wwwroot` is baked into `config.php` at install time.
+  the host port, and both `manage.mjs` and `docker-compose.yml` derive the site's
+  `wwwroot` from it (`MOODLE_WWWROOT` for the image's `config.php`). Changing it on an
+  installed site works for the configuration, but URLs Moodle stored in content keep the
+  old port.
+- Postgres runs with `fsync=off` and `synchronous_commit=off` (`docker-compose.yml`): writes
+  are much faster, but a power cut or a hard Docker stop can corrupt the database. If it
+  won't start or Moodle reports database errors after one, `npm run reset -- --yes` and
+  `npm run setup` (and `activity` if the teacher workload is needed).
+- The `cron` container runs Moodle's cron every minute (scheduled and ad hoc tasks:
+  backups, course copies, restores, notifications); `docker compose logs cron` shows it.
+  `npm run tasks` still runs the ad hoc ones at once.
 
 - The `mod_assign` generator creates assignments with `submissiondrafts = 1`, and its
   `create_submission()` goes through `save_submission()`, which leaves the submission as a

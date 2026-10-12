@@ -2,10 +2,34 @@
 # la carpeta del clon.
 name: moodle-sandbox
 
+# La imagen del sandbox (Dockerfile): Moodle con su código dentro. El webserver y el cron
+# la comparten; la etiqueta lleva la rama de Moodle.
+x-moodle: &moodle
+  build:
+    context: .
+    args:
+      MOODLE_BRANCH: ${MOODLE_BRANCH:-MOODLE_502_STABLE}
+  image: moodle-sandbox:${MOODLE_BRANCH:-MOODLE_502_STABLE}
+  restart: unless-stopped
+  depends_on:
+    db:
+      condition: service_healthy
+  environment:
+    - APACHE_DOCUMENT_ROOT=/var/www/html/public
+    # Lo que config.php lee del entorno (docker/config.php).
+    - MOODLE_DB_PASSWORD=${MOODLE_DB_PASSWORD}
+    - MOODLE_WWWROOT=${MOODLE_SANDBOX_URL:-http://localhost:${MOODLE_SANDBOX_PORT:-8080}}
+  volumes:
+    - moodledata_data:/var/www/moodledata
+
 services:
   db:
     image: postgres:17
     restart: unless-stopped
+    # Un sandbox desechable: sin esperar a que cada escritura llegue al disco, las escrituras
+    # van mucho más rápidas. A cambio, un corte de luz o un apagado brusco de Docker puede
+    # dejar la base de datos inservible (se rehace con `npm run reset -- --yes` y `setup`).
+    command: ["postgres", "-c", "fsync=off", "-c", "synchronous_commit=off", "-c", "full_page_writes=off", "-c", "shared_buffers=256MB"]
     environment:
       - POSTGRES_USER=moodle
       - POSTGRES_PASSWORD=${MOODLE_DB_PASSWORD}
@@ -19,19 +43,16 @@ services:
       retries: 20
 
   webserver:
-    image: moodlehq/moodle-php-apache:8.3-bullseye
-    restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
+    <<: *moodle
     ports:
       # MOODLE_SANDBOX_PORT se puede fijar en .env si el 8080 ya está ocupado.
       - "${MOODLE_SANDBOX_PORT:-8080}:80"
-    environment:
-      - APACHE_DOCUMENT_ROOT=/var/www/html/public
-    volumes:
-      - ./src:/var/www/html
-      - moodledata_data:/var/www/moodledata
+
+  # El cron de Moodle, cada minuto, como en un sitio de verdad: ejecuta las tareas programadas
+  # y las ad hoc (copias de seguridad y de cursos, restauraciones, envío de notificaciones…).
+  cron:
+    <<: *moodle
+    entrypoint: ["bash", "-c", "while true; do php /var/www/html/admin/cli/cron.php; sleep 60; done"]
 
 volumes:
   db_data:

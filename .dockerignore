@@ -1,0 +1,5 @@
+# La imagen solo necesita docker/ y php/: nada más entra en el contexto de construcción
+# (src/, el antiguo checkout, son decenas de miles de ficheros; .env, las contraseñas).
+*
+!docker/
+!php/

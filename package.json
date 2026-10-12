@@ -10,6 +10,7 @@
   },
   "scripts": {
     "setup": "node manage.mjs setup",
+    "build": "node manage.mjs build",
     "up": "node manage.mjs up",
     "down": "node manage.mjs down",
     "seed": "node manage.mjs seed",
