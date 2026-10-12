@@ -8,8 +8,10 @@ Es desechable: se monta con un comando, se puede volver a sembrar y se borra ent
 
 - Docker con Docker Compose.
 - Node.js 20 o superior (solo para `manage.mjs`; no hay dependencias que instalar).
-- Conexión a internet la primera vez: descarga el código de Moodle y las imágenes de Docker.
+- Conexión a internet la primera vez: descarga la imagen de Moodle y la de PostgreSQL.
 - Unos 3 GB libres para la imagen de Moodle.
+
+No hace falta cuenta de GitHub ni construir nada: la imagen de Moodle es pública.
 
 ## Empezar
 
@@ -17,7 +19,7 @@ Es desechable: se monta con un comando, se puede volver a sembrar y se borra ent
 npm run setup
 ```
 
-Deja todo listo: descarga la imagen de Moodle, levanta los contenedores, instala el sitio y siembra el curso de pruebas. La primera vez tarda unos minutos, sobre todo en descargar la imagen; las siguientes, segundos. Es seguro volver a ejecutarlo si se interrumpe o falla a mitad: cada paso se salta si ya está hecho.
+Deja todo listo: descarga la imagen de Moodle, levanta los contenedores, instala el sitio y siembra el curso de pruebas. La primera vez tarda unos minutos, sobre todo en descargar la imagen (2,4 GB; alrededor de un minuto con una buena conexión); las siguientes, segundos. Es seguro volver a ejecutarlo si se interrumpe o falla a mitad: cada paso se salta si ya está hecho.
 
 Al terminar imprime la URL y las credenciales de admin, profesor y alumno, que también están en todo momento en `.env` y en `npm run info`. El sitio queda en <http://localhost:8080>.
 
@@ -71,7 +73,7 @@ Tres contenedores, en el proyecto de Docker `moodle-sandbox`:
 - **`cron`**: la misma imagen ejecutando el cron de Moodle cada minuto, como en un sitio de verdad. Gracias a él funcionan solas las copias de seguridad, las copias de cursos, las restauraciones y el envío de notificaciones.
 - **`db`**: PostgreSQL 17.
 
-**El código de Moodle va dentro de la imagen** (`Dockerfile`): al construirla se clona una versión publicada de Moodle (una etiqueta de su repositorio, no una rama, para que todos tengan el mismo Moodle) y se instalan sus dependencias de Composer, con las de desarrollo, que las siembras necesitan. La imagen está publicada en el registro de GitHub para amd64 y arm64; `npm run up` la descarga, y solo si no la encuentra la construye en el equipo con el `Dockerfile`. Antes el código se montaba desde una carpeta del equipo, y en Windows eso hacía cada página varias veces más lenta: leer los ~58.000 ficheros PHP de Moodle a través de Docker Desktop costaba segundos por petición. Con el código dentro de la imagen y la caché de PHP dimensionada para él (`php/zz-sandbox.ini`), una página del curso pasa de unos 5 s a 0,13 s.
+**El código de Moodle va dentro de la imagen** (`Dockerfile`): al construirla se clona una versión publicada de Moodle (una etiqueta de su repositorio, no una rama, para que todos tengan el mismo Moodle) y se instalan sus dependencias de Composer, con las de desarrollo, que las siembras necesitan. La imagen está publicada y es pública en el registro de GitHub, para amd64 y arm64 (también Mac con chip M): [ghcr.io/falkenslab/moodle-sandbox](https://github.com/falkenslab/moodle-sandbox/pkgs/container/moodle-sandbox). `npm run up` la descarga; solo si no puede (sin acceso a GitHub, detrás de un proxy, o con una `MOODLE_VERSION` sin publicar) la construye en el equipo con el `Dockerfile`, en unos 6 minutos. Antes el código se montaba desde una carpeta del equipo, y en Windows eso hacía cada página varias veces más lenta: leer los ~58.000 ficheros PHP de Moodle a través de Docker Desktop costaba segundos por petición. Con el código dentro de la imagen y la caché de PHP dimensionada para él (`php/zz-sandbox.ini`), una página del curso pasa de unos 5 s a 0,13 s.
 
 **El sitio vive en dos volúmenes de Docker**: la base de datos (`db_data`) y los ficheros de Moodle (`moodledata_data`). `config.php` va en la imagen y lee la contraseña de la base de datos y la URL del entorno (`docker/config.php`), así que cambiar de imagen no toca los datos.
 
@@ -91,9 +93,11 @@ git tag v5.2.5 && git push origin v5.2.5
 
 El workflow `Imagen` (`.github/workflows/image.yml`) la construye para amd64 y arm64 y la publica como `5.2.5`, y también como `5.2` (la última de la serie). Si cambia el sandbox sin cambiar Moodle (la configuración de PHP, `config.php`), la etiqueta lleva un sufijo, `v5.2.5-2`, que actualiza también `5.2.5`.
 
+Las versiones nuevas se publican en el mismo paquete, que ya es público, así que no hay que hacer nada más. Solo un paquete nuevo de la organización nace privado: para que pueda ser público, la organización tiene que permitirlo (*Organization settings* → *Packages* → *Package creation* → *Public*) y hay que cambiar su visibilidad una vez en los ajustes del paquete.
+
 ### Si venías de la versión anterior
 
-Las versiones anteriores del sandbox clonaban Moodle en la carpeta `src/` y la montaban en el contenedor. Para pasar a la imagen basta con `git pull` y `npm run up`: construye la imagen (unos minutos), actualiza Moodle al código de la imagen y arranca el cron. Los datos son los mismos. Después, la carpeta `src/` ya no se usa y se puede borrar.
+Las versiones anteriores del sandbox clonaban Moodle en la carpeta `src/` y la montaban en el contenedor. Para pasar a la imagen basta con `git pull` y `npm run up`: descarga la imagen, actualiza Moodle al código de la imagen y arranca el cron. Los datos son los mismos. Después, la carpeta `src/` ya no se usa y se puede borrar.
 
 ## El curso de pruebas
 
