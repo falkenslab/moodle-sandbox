@@ -38,10 +38,13 @@ jobs:
             exit 1
           fi
           image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/moodle-sandbox"
+          tags="$image:$moodle,$image:$series"
+          # Con sufijo, también la etiqueta exacta (sin él, sería la misma que la de Moodle).
+          [ "$full" != "$moodle" ] && tags="$image:$full,$tags"
           {
             echo "ref=$TAG"
             echo "moodle=v$moodle"
-            echo "tags=$image:$full,$image:$moodle,$image:$series"
+            echo "tags=$tags"
           } >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v4

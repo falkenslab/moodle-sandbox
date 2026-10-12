@@ -21,6 +21,13 @@ RUN rm -rf /var/www/html \
 
 WORKDIR /var/www/html
 
+# Plugins que no vienen con Moodle, también en una versión fija. El sitio los tiene instalados:
+# sin su código, Moodle falla en las páginas que recorren los módulos (el banco de preguntas,
+# por ejemplo). mod_questionnaire: las encuestas tipo cuestionario.
+ARG QUESTIONNAIRE_VERSION=v5.0.3
+RUN git clone --depth 1 --branch "${QUESTIONNAIRE_VERSION}" https://github.com/PoetOS/moodle-mod_questionnaire.git public/mod/questionnaire \
+    && rm -rf public/mod/questionnaire/.git
+
 # Con las dependencias de desarrollo: las siembras usan los generadores de datos de Moodle. Las
 # versiones las fija el composer.lock de Moodle.
 RUN curl -sS https://getcomposer.org/installer -o /tmp/composer-setup.php \
