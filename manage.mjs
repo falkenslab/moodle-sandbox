@@ -193,12 +193,13 @@ function seed() {
 }
 
 /**
- * Ejecuta las tareas ad hoc pendientes de Moodle. El sandbox no tiene cron, y en Moodle 5
- * algunas son imprescindibles: sin transfer_question_categories/transfer_questions, el
- * banco de preguntas del curso queda bloqueado ("Create a new question" no aparece).
+ * Ejecuta ya las tareas ad hoc pendientes de Moodle, sin esperar al contenedor de cron (que
+ * pasa cada minuto). Las siembras la llaman al terminar: en Moodle 5 algunas son
+ * imprescindibles, y sin transfer_question_categories/transfer_questions el banco de
+ * preguntas del curso queda bloqueado ("Create a new question" no aparece).
  */
 function runAdhocTasks() {
-  log("Ejecutando las tareas pendientes de Moodle (no hay cron en el sandbox)...");
+  log("Ejecutando las tareas pendientes de Moodle...");
   composeExec(["php", "admin/cli/adhoc_task.php", "--execute"]);
 }
 
