@@ -111,14 +111,15 @@ MOODLE_STUDENT_EMAIL=alumno@example.com
 }
 
 /**
- * (Re)construye la imagen del sandbox: Moodle (MOODLE_BRANCH, MOODLE_502_STABLE por
- * defecto) con sus dependencias de Composer dentro (ver Dockerfile). `up` la construye
- * sola si falta; esto la rehace, con la última versión de la rama, y `up` recrea los
- * contenedores con ella. Los datos (base de datos, moodledata) no se tocan.
+ * Construye aquí la imagen del sandbox (ver Dockerfile): Moodle MOODLE_VERSION (5.2.4 por
+ * defecto) con sus dependencias de Composer dentro. Normalmente no hace falta: `up` descarga
+ * la imagen publicada y solo la construye si no la encuentra. Sirve para probar otra versión
+ * de Moodle o un cambio del Dockerfile; luego `up` recrea los contenedores con ella. Los
+ * datos (base de datos, moodledata) no se tocan.
  */
 function build() {
-  log("Construyendo la imagen de Moodle (la primera vez clona Moodle y Composer: unos minutos)...");
-  compose(["build", "--pull", "--no-cache", "webserver"]);
+  log("Construyendo la imagen de Moodle (clona Moodle e instala sus dependencias: unos minutos)...");
+  compose(["build", "--pull", "webserver"]);
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

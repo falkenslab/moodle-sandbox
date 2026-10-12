@@ -5,21 +5,24 @@
 #
 # El sitio no vive aquí: la base de datos y moodledata siguen en sus volúmenes, y config.php
 # lee la contraseña de la base de datos y la URL del entorno. Cambiar de versión de Moodle es
-# construir otra imagen (MOODLE_BRANCH) sin tocar los datos.
+# construir otra imagen (MOODLE_VERSION) sin tocar los datos.
 FROM moodlehq/moodle-php-apache:8.3-bullseye
 
-ARG MOODLE_BRANCH=MOODLE_502_STABLE
+# Una versión publicada de Moodle (una etiqueta de su repositorio), no una rama: así cada
+# construcción de la imagen da el mismo Moodle, en cualquier máquina y en cualquier momento.
+ARG MOODLE_VERSION=v5.2.4
 
-# Un clon superficial de una rama; sin .git, que Moodle no necesita. Desde /: la imagen base
-# trabaja en /var/www/html, que se borra para clonar ahí.
+# Un clon superficial de esa etiqueta; sin .git, que Moodle no necesita. Desde /: la imagen
+# base trabaja en /var/www/html, que se borra para clonar ahí.
 WORKDIR /
 RUN rm -rf /var/www/html \
-    && git clone --depth 1 --branch "${MOODLE_BRANCH}" https://github.com/moodle/moodle.git /var/www/html \
+    && git clone --depth 1 --branch "${MOODLE_VERSION}" https://github.com/moodle/moodle.git /var/www/html \
     && rm -rf /var/www/html/.git
 
 WORKDIR /var/www/html
 
-# Con las dependencias de desarrollo: las siembras usan los generadores de datos de Moodle.
+# Con las dependencias de desarrollo: las siembras usan los generadores de datos de Moodle. Las
+# versiones las fija el composer.lock de Moodle.
 RUN curl -sS https://getcomposer.org/installer -o /tmp/composer-setup.php \
     && php /tmp/composer-setup.php --install-dir=/usr/local/bin --filename=composer \
     && rm /tmp/composer-setup.php \
@@ -27,3 +30,6 @@ RUN curl -sS https://getcomposer.org/installer -o /tmp/composer-setup.php \
 
 COPY docker/config.php /var/www/html/config.php
 COPY php/zz-sandbox.ini /usr/local/etc/php/conf.d/zz-sandbox.ini
+
+LABEL org.opencontainers.image.source="https://github.com/falkenslab/moodle-sandbox" \
+      org.opencontainers.image.description="Moodle con su código dentro, para el sandbox de pruebas de falkenslab"

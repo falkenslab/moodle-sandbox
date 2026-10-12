@@ -1,0 +1,68 @@
+# Publica la imagen del sandbox en el registro de GitHub (ghcr.io/falkenslab/moodle-sandbox)
+# al crear una etiqueta de versión: v<versión de Moodle>, con un sufijo -N cuando cambia el
+# sandbox sin cambiar Moodle (v5.2.4, v5.2.4-2). Para amd64 y arm64 (Mac con chip M).
+#
+# Etiquetas de la imagen, para la etiqueta v5.2.4-2:
+#   5.2.4-2  esta construcción exacta
+#   5.2.4    la última construcción de ese Moodle (la que usa docker-compose.yml)
+#   5.2      la última de la serie 5.2
+name: Imagen
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Etiqueta a publicar (v5.2.4, v5.2.4-2…); debe existir en el repositorio"
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Versiones a partir de la etiqueta
+        id: version
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          full="${TAG#v}"                 # 5.2.4-2
+          moodle="${full%%-*}"            # 5.2.4
+          series="${moodle%.*}"           # 5.2
+          if ! [[ "$moodle" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "La etiqueta \"$TAG\" no es v<x.y.z> ni v<x.y.z>-<n>." >&2
+            exit 1
+          fi
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/moodle-sandbox"
+          {
+            echo "ref=$TAG"
+            echo "moodle=v$moodle"
+            echo "tags=$image:$full,$image:$moodle,$image:$series"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.version.outputs.ref }}
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          build-args: MOODLE_VERSION=${{ steps.version.outputs.moodle }}
+          tags: ${{ steps.version.outputs.tags }}
+          push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

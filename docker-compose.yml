@@ -2,14 +2,16 @@
 # la carpeta del clon.
 name: moodle-sandbox
 
-# La imagen del sandbox (Dockerfile): Moodle con su código dentro. El webserver y el cron
-# la comparten; la etiqueta lleva la rama de Moodle.
+# La imagen del sandbox (Dockerfile): Moodle con su código dentro. El webserver y el cron la
+# comparten. Su etiqueta es la versión de Moodle que lleva (MOODLE_VERSION): `up` la descarga
+# de GitHub si está publicada y, si no (o sin conexión), la construye aquí con el Dockerfile.
 x-moodle: &moodle
   build:
     context: .
     args:
-      MOODLE_BRANCH: ${MOODLE_BRANCH:-MOODLE_502_STABLE}
-  image: moodle-sandbox:${MOODLE_BRANCH:-MOODLE_502_STABLE}
+      MOODLE_VERSION: v${MOODLE_VERSION:-5.2.4}
+  image: ghcr.io/falkenslab/moodle-sandbox:${MOODLE_VERSION:-5.2.4}
+  pull_policy: missing
   restart: unless-stopped
   depends_on:
     db:

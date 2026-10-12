@@ -10,7 +10,7 @@ A disposable, Docker-based Moodle 5.x instance with a seeded demo course, used t
 
 ```
 npm run setup            # env + up (builds the image if missing) + install + seed, all idempotent
-npm run build            # rebuild the Moodle image (latest of MOODLE_BRANCH); `up` then recreates the containers
+npm run build            # build the Moodle image here instead of pulling it; `up` then recreates the containers
 npm run up | down | status
 npm run seed             # re-seed the demo course (no-op if it already exists)
 npm run activity         # teacher workload on top of it: students, submissions, forum doubts
@@ -24,7 +24,7 @@ npm run reset -- --yes   # wipes containers, volumes (the whole site) and .env; 
 ## Layout
 
 - `manage.mjs` — the whole lifecycle; one function per step.
-- `Dockerfile` — the sandbox's image: `moodlehq/moodle-php-apache` with Moodle's code (a shallow clone of `MOODLE_BRANCH`, `MOODLE_502_STABLE` by default) and its Composer dependencies (dev included: the seeds use Moodle's data generators) inside, `docker/config.php` (database password and URL from the environment) and `php/zz-sandbox.ini` (an opcache sized for Moodle's ~58000 PHP files, no per-request file checks). No bind mount of the code: through Docker Desktop on Windows it made every page several times slower. A new Moodle is a new image (`npm run build`); the site's data stays in its volumes.
+- `Dockerfile` — the sandbox's image: `moodlehq/moodle-php-apache` with Moodle's code (a shallow clone of the Moodle tag `v$MOODLE_VERSION`, `5.2.4` by default: a release tag, not a branch, so every build gives the same Moodle) and its Composer dependencies (dev included: the seeds use Moodle's data generators) inside, `docker/config.php` (database password and URL from the environment) and `php/zz-sandbox.ini` (an opcache sized for Moodle's ~58000 PHP files, no per-request file checks). No bind mount of the code: through Docker Desktop on Windows it made every page several times slower. Published as `ghcr.io/falkenslab/moodle-sandbox:<moodle version>` (amd64 and arm64) by `.github/workflows/image.yml` when a `v<x.y.z>` tag is pushed (`v<x.y.z>-<n>` for a sandbox change on the same Moodle; it also updates `<x.y.z>` and `<x.y>`). Compose pulls it (`pull_policy: missing`) and builds it from the `Dockerfile` only when it can't. A new Moodle is a new `MOODLE_VERSION` (default in both `docker-compose.yml` and the `Dockerfile`) and a new tag; the site's data stays in its volumes.
 - `docker-compose.yml` — fixed project name `moodle-sandbox`, port 8080: Postgres 17 tuned for a disposable site (`fsync=off`, `synchronous_commit=off`: fast writes, but a power cut or a hard Docker stop can corrupt it; `reset` and `setup` rebuild it), the webserver, and a `cron` container running Moodle's cron every minute (scheduled and ad hoc tasks: backups, course copies, restores, notifications), all from the same image.
 - `seed/seed-teacher-activity.php` — turns the demo course into a teacher's workload: coherent content, three more students whose submissions (good, thin, conceptually wrong) are *submitted*, and forum threads (one unanswered, one answered wrongly by a classmate). Idempotent; copied into the container like the course seed.
 - `info` in `manage.mjs` — the contract other agents depend on (student-agent's and teacher-agent's `sandbox-e2e` skills): keep its JSON shape stable, and add fields rather than renaming them.

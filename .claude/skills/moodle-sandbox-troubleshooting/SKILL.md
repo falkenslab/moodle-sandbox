@@ -38,7 +38,13 @@ out while building `manage.mjs`. Read this before touching the sandbox again.
   seconds (a login page 9–10 s with a few test runs on it). That's why the code lives in the
   image (`Dockerfile`), with an opcache sized for it (`php/zz-sandbox.ini`: Moodle 5.2 has
   ~58000 PHP files, the default opcache holds 10000 and kept recompiling). A new Moodle is
-  `npm run build` and `npm run up`.
+  a new `MOODLE_VERSION` and `npm run up`.
+- The image clones a Moodle release tag (`v5.2.4`), not a branch: a branch build gave each
+  machine whatever the branch held that day, so two sandboxes ran different Moodles. A first
+  image built from `MOODLE_502_STABLE` left the site "upgrade pending" (cron suspended,
+  Moodle's upgrade notice instead of pages) until `admin/cli/upgrade.php` ran; `up` now
+  runs it whenever the site is installed. Moodle refuses to go back to an older version
+  than the database's (`mdl_config.version`): an older `MOODLE_VERSION` needs `reset`.
 - Killing a background `docker compose exec ... php ...` process (e.g. via a task-runner's
   "stop task", or a shell timeout) does not kill the process inside the container — it
   keeps running server-side detached from whatever spawned it (confirmed by watching it in
