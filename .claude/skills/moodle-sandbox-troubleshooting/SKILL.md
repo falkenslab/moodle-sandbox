@@ -15,6 +15,13 @@ out while building `manage.mjs`. Read this before touching the sandbox again.
   image holds the *whole* checkout at `/var/www/html` and sets
   `APACHE_DOCUMENT_ROOT=/var/www/html/public`, because CLI scripts still need the full
   tree next to `public/`.
+- Moodle 4.5 has no `public/`: the docroot is the checkout itself. Don't set
+  `APACHE_DOCUMENT_ROOT` in compose: `moodle-php-apache`'s entrypoint
+  (`/system-docker-entrypoint.d/10-wwwroot.sh`) picks `/var/www/html/public` when it exists
+  and `/var/www/html` otherwise, so one compose file serves both. Plugins in the `Dockerfile`
+  go to `public/mod/...` or `mod/...` the same way. In a `RUN` chain, test for it with
+  `if [ -d public ]; then ...; fi`, not `[ -d public ] && ...`, which exits 1 on 4.5 and
+  stops the `&&` chain.
 - `admin/cli/install.php` writes `config.php` as `640 root:root`, which Apache's `www-data`
   can't read. The image ships its own `config.php` (`docker/config.php`, readable, the
   database password and URL from the environment), so the install only runs

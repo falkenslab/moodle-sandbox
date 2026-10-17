@@ -18,7 +18,44 @@ import { randomBytes } from "node:crypto";
 const moodleDir = path.dirname(fileURLToPath(import.meta.url));
 // El checkout de Moodle de antes de la imagen (ver Dockerfile): ya no se usa; `reset` lo borra.
 const srcDir = path.join(moodleDir, "src");
-const envPath = path.join(moodleDir, ".env");
+
+/**
+ * Los sitios que pueden convivir, uno por serie de Moodle: cada uno con su proyecto de Docker
+ * Compose (sus contenedores y volúmenes), su puerto y su .env. El 5.2 es el de siempre y el que
+ * usan los agentes por defecto; `--moodle 4.5` en cualquier orden elige el otro.
+ */
+const SITES = {
+  "5.2": { project: "moodle-sandbox", version: "5.2.4", port: "8080", name: "Moodle Sandbox" },
+  "4.5": { project: "moodle-sandbox-45", version: "4.5.15", port: "8081", name: "Moodle Sandbox 4.5" },
+};
+
+/** Saca `--moodle <serie>` (o `--moodle=<serie>`) de los argumentos y devuelve el sitio. Sin él,
+ * MOODLE_SANDBOX_PROJECT (del entorno) elige el sitio por su proyecto; si no es de ninguno, es un
+ * sitio más con los valores del 5.2 y su propio .env. */
+function selectSite(args) {
+  let series;
+  for (let i = 0; i < args.length; i++) {
+    const match = args[i].match(/^--moodle(?:=(.*))?$/);
+    if (!match) continue;
+    series = match[1] ?? args[i + 1];
+    args.splice(i, match[1] === undefined ? 2 : 1);
+    break;
+  }
+  if (series !== undefined && !SITES[series]) {
+    throw new Error(`No hay sitio para Moodle "${series}": ${Object.keys(SITES).join(", ")}.`);
+  }
+  const project = process.env.MOODLE_SANDBOX_PROJECT || SITES[series ?? "5.2"].project;
+  const preset = SITES[series] ?? Object.values(SITES).find((s) => s.project === project) ?? SITES["5.2"];
+  return {
+    ...preset,
+    project,
+    // El de siempre conserva .env; los demás, .env.<proyecto>.
+    envPath: path.join(moodleDir, project === SITES["5.2"].project ? ".env" : `.env.${project}`),
+  };
+}
+
+let site;
+let envPath;
 const seedScript = path.join(moodleDir, "seed", "seed-course.php");
 const activityScript = path.join(moodleDir, "seed", "seed-teacher-activity.php");
 const emptyCourseScript = path.join(moodleDir, "seed", "seed-empty-course.php");
@@ -39,19 +76,25 @@ function runCapture(cmd, args, opts = {}) {
   return spawnSync(cmd, args, { cwd: moodleDir, encoding: "utf-8", ...opts });
 }
 
+/** `docker compose` del sitio elegido: su proyecto y su .env (con lo demás, MOODLE_VERSION y
+ * MOODLE_SANDBOX_PORT, en el entorno: ver el final del fichero). */
+function composeBase() {
+  return ["compose", "-p", site.project, ...(existsSync(envPath) ? ["--env-file", envPath] : [])];
+}
+
 function compose(args) {
-  run("docker", ["compose", ...args]);
+  run("docker", [...composeBase(), ...args]);
 }
 
 /** `docker compose exec webserver <args>` — rutas siempre relativas a /var/www/html. */
 function composeExec(args) {
-  run("docker", ["compose", "exec", "webserver", ...args]);
+  run("docker", [...composeBase(), "exec", "webserver", ...args]);
 }
 
 /** Copia un fichero del repo al código de Moodle del webserver, con ese nombre: las
  * siembras se cargan como `__DIR__ . '/config.php'`, así que van junto a config.php. */
 function putCode(file, name) {
-  run("docker", ["compose", "cp", file, `webserver:/var/www/html/${name}`]);
+  run("docker", [...composeBase(), "cp", file, `webserver:/var/www/html/${name}`]);
 }
 
 function randomPassword() {
@@ -69,10 +112,10 @@ function readEnvFile() {
   return vars;
 }
 
-/** Puerto del host: MOODLE_SANDBOX_PORT del entorno o de .env (docker compose también
- * lo lee de .env), 8080 por defecto. */
+/** Puerto del host: MOODLE_SANDBOX_PORT del entorno o del .env del sitio (docker compose
+ * también lo lee de ahí); si no, el del sitio (8080 el 5.2, 8081 el 4.5). */
 function sandboxPort() {
-  return process.env.MOODLE_SANDBOX_PORT || readEnvFile().MOODLE_SANDBOX_PORT || "8080";
+  return process.env.MOODLE_SANDBOX_PORT || readEnvFile().MOODLE_SANDBOX_PORT || site.port;
 }
 
 /** URL del sitio: MOODLE_SANDBOX_URL si se da, si no localhost con el puerto del sandbox. */
@@ -83,7 +126,7 @@ function wwwroot() {
 /** Crea .env con contraseñas aleatorias si no existe todavía. Nunca lo sobrescribe. */
 function ensureEnv() {
   if (existsSync(envPath)) {
-    log(".env ya existe, no se toca.");
+    log(`${path.basename(envPath)} ya existe, no se toca.`);
     return;
   }
   const content = `MOODLE_SANDBOX_PORT=${sandboxPort()}
@@ -91,7 +134,7 @@ MOODLE_DB_PASSWORD=${randomPassword()}
 MOODLE_ADMIN_USERNAME=admin
 MOODLE_ADMIN_PASSWORD=${randomPassword()}
 MOODLE_ADMIN_EMAIL=admin@example.com
-MOODLE_SITE_NAME="Moodle Sandbox"
+MOODLE_SITE_NAME="${site.name}"
 
 MOODLE_TEACHER_USERNAME=profesor
 MOODLE_TEACHER_PASSWORD=${randomPassword()}
@@ -107,7 +150,7 @@ MOODLE_STUDENT_EMAIL=alumno@example.com
   } catch {
     // best-effort, no-op en Windows
   }
-  log(`.env generado con credenciales nuevas en ${envPath}`);
+  log(`${path.basename(envPath)} generado con credenciales nuevas en ${envPath}`);
 }
 
 /**
@@ -133,7 +176,7 @@ async function up() {
   const deadline = Date.now() + 60_000;
   let healthy = false;
   while (!healthy && Date.now() < deadline) {
-    healthy = runCapture("docker", ["compose", "ps", "db", "--format", "{{.Health}}"]).stdout?.trim() === "healthy";
+    healthy = runCapture("docker", [...composeBase(), "ps", "db", "--format", "{{.Health}}"]).stdout?.trim() === "healthy";
     if (!healthy) await sleep(1000);
   }
   log(healthy ? "Base de datos lista." : "Aviso: la base de datos no confirmó estar healthy en 60s, se continúa igualmente.");
@@ -142,7 +185,7 @@ async function up() {
 
 function dbHasTables() {
   const result = runCapture("docker", [
-    "compose", "exec", "-T", "db", "psql", "-U", "moodle", "-d", "moodle",
+    ...composeBase(), "exec", "-T", "db", "psql", "-U", "moodle", "-d", "moodle",
     "-tAc", "select 1 from information_schema.tables where table_name='mdl_config' limit 1",
   ]);
   return result.stdout?.trim() === "1";
@@ -240,7 +283,7 @@ function course(args) {
   putCode(emptyCourseScript, "seed-empty-course.php");
   const vars = readEnvFile();
   const result = runCapture("docker", [
-    "compose", "exec", "-T", "webserver", "env",
+    ...composeBase(), "exec", "-T", "webserver", "env",
     `COURSE_SHORTNAME=${shortname}`, `COURSE_FULLNAME=${fullname ?? shortname}`,
     `MOODLE_TEACHER_USERNAME=${vars.MOODLE_TEACHER_USERNAME ?? "profesor"}`,
     `MOODLE_STUDENT_USERNAME=${vars.MOODLE_STUDENT_USERNAME ?? "alumno"}`,
@@ -265,14 +308,14 @@ function down() {
  * reconstruye `build`. Requiere --yes explícito para no borrar nada por accidente. */
 function reset(args) {
   if (!args.includes("--yes")) {
-    throw new Error("Esto borra los contenedores, los volúmenes (el sitio entero) y .env. Repite con --yes si es lo que quieres.");
+    throw new Error(`Esto borra los contenedores, los volúmenes (el sitio ${site.project} entero) y ${path.basename(envPath)}. Repite con --yes si es lo que quieres.`);
   }
-  log("Borrando contenedores y volúmenes...");
+  log(`Borrando contenedores y volúmenes de ${site.project}...`);
   compose(["down", "-v"]);
-  log("Borrando .env (y src/, si queda)...");
+  log(`Borrando ${path.basename(envPath)} (y src/, si queda)...`);
   rmSync(srcDir, { recursive: true, force: true });
   rmSync(envPath, { force: true });
-  log("Listo. 'npm run setup' para volver a montar el sandbox desde cero.");
+  log("Listo. 'npm run setup' (con el mismo --moodle) para volver a montar el sandbox desde cero.");
 }
 
 function status() {
@@ -286,17 +329,26 @@ function installedWwwroot() {
 }
 
 function isRunning() {
-  const result = runCapture("docker", ["compose", "ps", "webserver", "--format", "{{.State}}"]);
+  const result = runCapture("docker", [...composeBase(), "ps", "webserver", "--format", "{{.State}}"]);
   return result.stdout?.trim() === "running";
 }
 
 function courseId() {
   const result = runCapture("docker", [
-    "compose", "exec", "-T", "db", "psql", "-U", "moodle", "-d", "moodle",
+    ...composeBase(), "exec", "-T", "db", "psql", "-U", "moodle", "-d", "moodle",
     "-tAc", "select id from mdl_course where shortname='sandbox-course'",
   ]);
   const id = Number(result.stdout?.trim());
   return Number.isInteger(id) && id > 0 ? id : undefined;
+}
+
+/** La versión de Moodle instalada, como la guarda el sitio: "4.5.15 (Build: 20251006)". */
+function moodleRelease() {
+  const result = runCapture("docker", [
+    ...composeBase(), "exec", "-T", "db", "psql", "-U", "moodle", "-d", "moodle",
+    "-tAc", "select value from mdl_config where name='release'",
+  ]);
+  return result.stdout?.trim() || undefined;
 }
 
 /**
@@ -328,12 +380,16 @@ function info(args) {
     students: vars.MOODLE_SEEDED_STUDENTS_PASSWORD
       ? ["lucia.martin", "marcos.lopez", "sara.gil"].map((username) => ({ username, password: vars.MOODLE_SEEDED_STUDENTS_PASSWORD }))
       : [],
+    // Which of the sandboxes this is (`--moodle 4.5` picks the 4.5 one; 5.2 by default).
+    moodle: { release: moodleRelease(), series: site.version.split(".").slice(0, 2).join(".") },
+    project: site.project,
   };
   if (json) {
     process.stdout.write(`${JSON.stringify(data, null, 2)}\n`);
     return;
   }
   console.log(`URL:      ${data.url}`);
+  console.log(`Moodle:   ${data.moodle.release} (proyecto ${data.project})`);
   console.log(`Curso:    ${data.course.shortname} (id ${data.course.id}) → ${data.url}/course/view.php?id=${data.course.id}`);
   console.log(`Admin:    ${data.admin.username} / ${data.admin.password}`);
   console.log(`Profesor: ${data.teacher.username} / ${data.teacher.password}`);
@@ -358,11 +414,20 @@ const COMMANDS = { env: ensureEnv, build, up, install: installSite, seed, activi
 
 const [, , cmd, ...rest] = process.argv;
 if (!cmd || !(cmd in COMMANDS)) {
-  console.error(`Uso: node manage.mjs <${Object.keys(COMMANDS).join("|")}>`);
+  console.error(`Uso: node manage.mjs <${Object.keys(COMMANDS).join("|")}> [--moodle ${Object.keys(SITES).join("|")}]`);
   process.exit(1);
 }
 
 try {
+  site = selectSite(rest);
+  envPath = site.envPath;
+  // Otra versión de Moodle, del entorno o del .env del sitio; si no, la del sitio.
+  site.version = process.env.MOODLE_VERSION || readEnvFile().MOODLE_VERSION || site.version;
+  // Para docker compose (docker-compose.yml): el proyecto, la imagen y el puerto del sitio. El
+  // entorno manda sobre el .env, y sin esto el 4.5 tomaría los valores por defecto (los del 5.2).
+  process.env.MOODLE_SANDBOX_PROJECT = site.project;
+  process.env.MOODLE_VERSION = site.version;
+  process.env.MOODLE_SANDBOX_PORT = sandboxPort();
   await COMMANDS[cmd](rest);
 } catch (error) {
   console.error(`[moodle] ${error.message}`);

@@ -53,8 +53,9 @@ Variables de entorno opcionales, que también se pueden poner en `.env`:
 
 | Variable | Por defecto | Para qué |
 | --- | --- | --- |
-| `MOODLE_VERSION` | `5.2.4` | Versión de Moodle de la imagen |
-| `MOODLE_SANDBOX_PORT` | `8080` | Puerto del sitio |
+| `MOODLE_VERSION` | `5.2.4` | Versión de Moodle de la imagen (`4.5.15` en el sitio de 4.5) |
+| `MOODLE_SANDBOX_PORT` | `8080` | Puerto del sitio (`8081` en el de 4.5) |
+| `MOODLE_SANDBOX_PROJECT` | `moodle-sandbox` | Proyecto de Docker del sitio, y con él sus volúmenes y su `.env` (solo del entorno; ver [Moodle 4.5 al lado del 5.2](#moodle-45-al-lado-del-52)) |
 | `MOODLE_SANDBOX_URL` | `http://localhost:<puerto>` | URL completa del sitio |
 
 Si el 8080 ya está ocupado (por ejemplo, por otro Moodle), elige otro puerto, mejor antes de la primera instalación, porque los enlaces que Moodle guarda en los contenidos conservan el puerto con el que se crearon:
@@ -64,6 +65,27 @@ MOODLE_SANDBOX_PORT=8081 npm run setup
 ```
 
 El puerto se guarda en `.env`, así que los demás comandos ya lo usan sin repetirlo.
+
+## Moodle 4.5 al lado del 5.2
+
+Además del sitio de Moodle 5.2, puede correr a la vez un Moodle 4.5, la versión de soporte extendido (hasta 2027) que usan muchos centros y campus, para probar un programa contra las dos. Cualquier comando con `--moodle 4.5` trabaja con ese sitio:
+
+```bash
+npm run setup -- --moodle 4.5
+npm run activity -- --moodle 4.5
+npm run info -- --moodle 4.5 --json
+```
+
+| Sitio | Moodle | URL | Proyecto de Docker | Credenciales |
+| --- | --- | --- | --- | --- |
+| Por defecto | 5.2.4 | <http://localhost:8080> | `moodle-sandbox` | `.env` |
+| `--moodle 4.5` | 4.5.15 | <http://localhost:8081> | `moodle-sandbox-45` | `.env.moodle-sandbox-45` |
+
+Cada uno tiene sus contenedores, sus volúmenes (su base de datos y sus ficheros) y sus contraseñas, así que se montan, se paran y se borran por separado: `npm run reset -- --moodle 4.5 --yes` borra solo el de 4.5. Sin `--moodle`, todo sigue como siempre: los agentes reciben el de 5.2. El curso de pruebas, el trabajo del profesor y `info` son los mismos en los dos; `info` dice cuál es en `moodle` y `project`.
+
+La imagen de 4.5 es la misma receta (`Dockerfile`) con otra versión de Moodle: PHP 8.3, que 4.5 también admite, y `mod_questionnaire` en la versión hecha para 4.4 y 4.5. En 4.5 el código de Moodle no tiene la carpeta `public/` de 5.1 en adelante; la imagen base sirve la que haya.
+
+`MOODLE_SANDBOX_PROJECT` (en el entorno) elige un sitio por su proyecto de Docker, y uno con otro nombre es un sitio más, con sus propios volúmenes y su `.env.<proyecto>`; con `MOODLE_VERSION` y `MOODLE_SANDBOX_PORT` puede llevar cualquier otra versión en otro puerto.
 
 ## Cómo funciona
 
@@ -92,6 +114,8 @@ git tag v5.2.5 && git push origin v5.2.5
 ```
 
 El workflow `Imagen` (`.github/workflows/image.yml`) la construye para amd64 y arm64 y la publica como `5.2.5`, y también como `5.2` (la última de la serie). Si cambia el sandbox sin cambiar Moodle (la configuración de PHP, `config.php`), la etiqueta lleva un sufijo, `v5.2.5-2`, que actualiza también `5.2.5`.
+
+La de Moodle 4.5 se publica igual, con su etiqueta (`git tag v4.5.15`), desde el mismo `Dockerfile`; su versión por defecto está en `SITES` de `manage.mjs`. Un cambio del `Dockerfile` que afecte a las dos necesita una etiqueta para cada una.
 
 Las versiones nuevas se publican en el mismo paquete, que ya es público, así que no hay que hacer nada más. Solo un paquete nuevo de la organización nace privado: para que pueda ser público, la organización tiene que permitirlo (*Organization settings* → *Packages* → *Package creation* → *Public*) y hay que cambiar su visibilidad una vez en los ajustes del paquete.
 
@@ -130,8 +154,12 @@ Los tres comparten una contraseña que se guarda en `.env` (`MOODLE_SEEDED_STUDE
   "admin":   { "username": "admin",    "password": "..." },
   "teacher": { "username": "profesor", "password": "..." },
   "student": { "username": "alumno",   "password": "..." },
-  "students": [ { "username": "lucia.martin", "password": "..." }, ... ] }
+  "students": [ { "username": "lucia.martin", "password": "..." }, ... ],
+  "moodle": { "release": "5.2.4 (Build: 20261005)", "series": "5.2" },
+  "project": "moodle-sandbox" }
 ```
+
+Con `--moodle 4.5`, el mismo JSON del sitio de 4.5.
 
 Un programa debería depender solo de este comando, no de `.env` ni de la base de datos. La forma del JSON se mantiene estable: se añaden campos, no se renombran.
 
@@ -148,5 +176,6 @@ Un programa debería depender solo de este comando, no de `.env` ni de la base d
 │   ├── seed-course.php            # crea el curso, el profesor, el alumno y las actividades
 │   ├── seed-teacher-activity.php  # alumnos, entregas y dudas para un agente de profesor
 │   └── seed-empty-course.php      # curso vacío para construir (npm run course)
-└── .env                 # credenciales generadas (se crea solo, no se sube al repo)
+├── .env                 # credenciales generadas (se crea solo, no se sube al repo)
+└── .env.moodle-sandbox-45       # las del sitio de Moodle 4.5, si lo hay
 ```

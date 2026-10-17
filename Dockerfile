@@ -21,12 +21,18 @@ RUN rm -rf /var/www/html \
 
 WORKDIR /var/www/html
 
-# Plugins que no vienen con Moodle, también en una versión fija. El sitio los tiene instalados:
-# sin su código, Moodle falla en las páginas que recorren los módulos (el banco de preguntas,
-# por ejemplo). mod_questionnaire: las encuestas tipo cuestionario.
-ARG QUESTIONNAIRE_VERSION=v5.0.3
-RUN git clone --depth 1 --branch "${QUESTIONNAIRE_VERSION}" https://github.com/PoetOS/moodle-mod_questionnaire.git public/mod/questionnaire \
-    && rm -rf public/mod/questionnaire/.git
+# Plugins que no vienen con Moodle, también en una versión fija: la hecha para la serie de Moodle
+# de la imagen. El sitio los tiene instalados: sin su código, Moodle falla en las páginas que
+# recorren los módulos (el banco de preguntas, por ejemplo). Van en public/ desde Moodle 5.1 y en
+# la raíz del código antes (4.5). mod_questionnaire: las encuestas tipo cuestionario.
+ARG QUESTIONNAIRE_VERSION=
+RUN plugins="$(if [ -d public ]; then echo public/; fi)" \
+    && case "${MOODLE_VERSION}" in \
+         v4.*) questionnaire="${QUESTIONNAIRE_VERSION:-v4.4.0}" ;; \
+         *)    questionnaire="${QUESTIONNAIRE_VERSION:-v5.0.3}" ;; \
+       esac \
+    && git clone --depth 1 --branch "${questionnaire}" https://github.com/PoetOS/moodle-mod_questionnaire.git "${plugins}mod/questionnaire" \
+    && rm -rf "${plugins}mod/questionnaire/.git"
 
 # Con las dependencias de desarrollo: las siembras usan los generadores de datos de Moodle. Las
 # versiones las fija el composer.lock de Moodle.

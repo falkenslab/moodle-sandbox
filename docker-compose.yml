@@ -1,6 +1,7 @@
 # Nombre fijo del proyecto: los contenedores y volúmenes no dependen de cómo se llame
-# la carpeta del clon.
-name: moodle-sandbox
+# la carpeta del clon. Otro nombre (MOODLE_SANDBOX_PROJECT) es otro sitio, con sus propios
+# volúmenes: así conviven el de Moodle 5.2 y el de 4.5 (manage.mjs --moodle 4.5).
+name: ${MOODLE_SANDBOX_PROJECT:-moodle-sandbox}
 
 # La imagen del sandbox (Dockerfile): Moodle con su código dentro. El webserver y el cron la
 # comparten. Su etiqueta es la versión de Moodle que lleva (MOODLE_VERSION): `up` la descarga
@@ -16,8 +17,9 @@ x-moodle: &moodle
   depends_on:
     db:
       condition: service_healthy
+  # Sin APACHE_DOCUMENT_ROOT: la imagen base sirve /var/www/html/public si existe (Moodle 5.1 y
+  # siguientes) y /var/www/html si no (4.5).
   environment:
-    - APACHE_DOCUMENT_ROOT=/var/www/html/public
     # Lo que config.php lee del entorno (docker/config.php).
     - MOODLE_DB_PASSWORD=${MOODLE_DB_PASSWORD}
     - MOODLE_WWWROOT=${MOODLE_SANDBOX_URL:-http://localhost:${MOODLE_SANDBOX_PORT:-8080}}
