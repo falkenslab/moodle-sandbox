@@ -6,7 +6,7 @@
  * el problema de Git Bash reescribiendo argumentos que parecen rutas absolutas de
  * Unix (`/var/www/html`, etc.) al pasarlos a `docker compose exec`.
  *
- * Uso: node manage.mjs <env|build|up|install|seed|setup|down|reset|status|info|tasks|course|activity>
+ * Uso: node manage.mjs <env|build|up|install|seed|setup|down|reset|status|info|tasks|course|activity|theme>
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, rmSync, writeFileSync, readFileSync, chmodSync } from "node:fs";
@@ -342,13 +342,23 @@ function courseId() {
   return Number.isInteger(id) && id > 0 ? id : undefined;
 }
 
-/** La versión de Moodle instalada, como la guarda el sitio: "4.5.15 (Build: 20251006)". */
-function moodleRelease() {
+/** Un ajuste del sitio (mdl_config), leído de la base de datos sin arrancar Moodle. */
+function siteConfig(name) {
   const result = runCapture("docker", [
     ...composeBase(), "exec", "-T", "db", "psql", "-U", "moodle", "-d", "moodle",
-    "-tAc", "select value from mdl_config where name='release'",
+    "-tAc", `select value from mdl_config where name='${name}'`,
   ]);
   return result.stdout?.trim() || undefined;
+}
+
+/** Cambia el tema del sitio (boost o classic: algunos campus usan Classic) y vacía las
+ * cachés. La primera página después tarda: compila el CSS del tema. */
+function theme(args) {
+  const [name] = args;
+  if (!["boost", "classic"].includes(name)) throw new Error("Uso: npm run theme -- boost|classic [--moodle 4.5]");
+  composeExec(["php", "admin/cli/cfg.php", "--name=theme", `--set=${name}`]);
+  composeExec(["php", "admin/cli/purge_caches.php"]);
+  log(`Tema del sitio: ${name}.`);
 }
 
 /**
@@ -381,7 +391,7 @@ function info(args) {
       ? ["lucia.martin", "marcos.lopez", "sara.gil"].map((username) => ({ username, password: vars.MOODLE_SEEDED_STUDENTS_PASSWORD }))
       : [],
     // Which of the sandboxes this is (`--moodle 4.5` picks the 4.5 one; 5.2 by default).
-    moodle: { release: moodleRelease(), series: site.version.split(".").slice(0, 2).join(".") },
+    moodle: { release: siteConfig("release"), series: site.version.split(".").slice(0, 2).join("."), theme: siteConfig("theme") },
     project: site.project,
   };
   if (json) {
@@ -389,7 +399,7 @@ function info(args) {
     return;
   }
   console.log(`URL:      ${data.url}`);
-  console.log(`Moodle:   ${data.moodle.release} (proyecto ${data.project})`);
+  console.log(`Moodle:   ${data.moodle.release} · tema ${data.moodle.theme} (proyecto ${data.project})`);
   console.log(`Curso:    ${data.course.shortname} (id ${data.course.id}) → ${data.url}/course/view.php?id=${data.course.id}`);
   console.log(`Admin:    ${data.admin.username} / ${data.admin.password}`);
   console.log(`Profesor: ${data.teacher.username} / ${data.teacher.password}`);
@@ -410,7 +420,7 @@ async function setup() {
   log(`  Alumno:   ${vars.MOODLE_STUDENT_USERNAME} / ${vars.MOODLE_STUDENT_PASSWORD}`);
 }
 
-const COMMANDS = { env: ensureEnv, build, up, install: installSite, seed, activity, setup, down, reset, status, info, tasks: runAdhocTasks, course };
+const COMMANDS = { env: ensureEnv, build, up, install: installSite, seed, activity, setup, down, reset, status, info, tasks: runAdhocTasks, course, theme };
 
 const [, , cmd, ...rest] = process.argv;
 if (!cmd || !(cmd in COMMANDS)) {

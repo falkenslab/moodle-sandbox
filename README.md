@@ -42,6 +42,7 @@ npm run activity
 | `npm run activity` | Añade trabajo para un agente de profesor: alumnos, entregas y dudas en el foro |
 | `npm run course -- <nombre-corto> ["Nombre completo"] [--json]` | Crea un curso vacío con el profesor y los alumnos matriculados |
 | `npm run tasks` | Ejecuta ya las tareas pendientes de Moodle, sin esperar al cron |
+| `npm run theme -- classic\|boost` | Cambia el tema del sitio (Boost por defecto; algunos campus usan Classic) y vacía las cachés |
 | `npm run build` | Construye la imagen aquí en vez de descargarla (otra versión de Moodle, un cambio del `Dockerfile`); después, `npm run up` |
 | `npm run reset -- --yes` | Borra el sitio entero (contenedores, base de datos, ficheros y `.env`) para empezar de cero |
 
@@ -155,7 +156,7 @@ Los tres comparten una contraseña que se guarda en `.env` (`MOODLE_SEEDED_STUDE
   "teacher": { "username": "profesor", "password": "..." },
   "student": { "username": "alumno",   "password": "..." },
   "students": [ { "username": "lucia.martin", "password": "..." }, ... ],
-  "moodle": { "release": "5.2.4 (Build: 20261005)", "series": "5.2" },
+  "moodle": { "release": "5.2.4 (Build: 20261005)", "series": "5.2", "theme": "boost" },
   "project": "moodle-sandbox" }
 ```
 
