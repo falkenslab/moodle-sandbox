@@ -21,25 +21,17 @@ RUN rm -rf /var/www/html \
 
 WORKDIR /var/www/html
 
-# Plugins que no vienen con Moodle, también en una versión fija: la hecha para la serie de Moodle
-# de la imagen. El sitio los tiene instalados: sin su código, Moodle falla en las páginas que
-# recorren los módulos (el banco de preguntas, por ejemplo). Van en public/ desde Moodle 5.1 y en
-# la raíz del código antes (4.5). mod_questionnaire: las encuestas tipo cuestionario.
-ARG QUESTIONNAIRE_VERSION=
-RUN plugins="$(if [ -d public ]; then echo public/; fi)" \
-    && case "${MOODLE_VERSION}" in \
-         v4.*) questionnaire="${QUESTIONNAIRE_VERSION:-v4.4.0}" ;; \
-         *)    questionnaire="${QUESTIONNAIRE_VERSION:-v5.0.3}" ;; \
-       esac \
-    && git clone --depth 1 --branch "${questionnaire}" https://github.com/PoetOS/moodle-mod_questionnaire.git "${plugins}mod/questionnaire" \
-    && rm -rf "${plugins}mod/questionnaire/.git"
-
 # Con las dependencias de desarrollo: las siembras usan los generadores de datos de Moodle. Las
 # versiones las fija el composer.lock de Moodle.
 RUN curl -sS https://getcomposer.org/installer -o /tmp/composer-setup.php \
     && php /tmp/composer-setup.php --install-dir=/usr/local/bin --filename=composer \
     && rm /tmp/composer-setup.php \
     && COMPOSER_ALLOW_SUPERUSER=1 composer install --no-interaction --no-progress
+
+# Plugins que no vienen con Moodle (docker/plugins.txt), cada uno en la versión hecha para la serie
+# de Moodle de la imagen. Después de composer: cambiar la lista no repite esa capa, la más lenta.
+COPY docker/plugins.txt docker/install-plugins.sh /tmp/plugins/
+RUN bash /tmp/plugins/install-plugins.sh /tmp/plugins/plugins.txt "${MOODLE_VERSION}" && rm -rf /tmp/plugins
 
 COPY docker/config.php /var/www/html/config.php
 COPY php/zz-sandbox.ini /usr/local/etc/php/conf.d/zz-sandbox.ini

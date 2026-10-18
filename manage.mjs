@@ -6,7 +6,7 @@
  * el problema de Git Bash reescribiendo argumentos que parecen rutas absolutas de
  * Unix (`/var/www/html`, etc.) al pasarlos a `docker compose exec`.
  *
- * Uso: node manage.mjs <env|build|up|install|seed|setup|down|reset|status|info|tasks|course|activity|theme>
+ * Uso: node manage.mjs <env|build|up|install|seed|setup|down|reset|status|info|tasks|course|activity|theme|plugins>
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, rmSync, writeFileSync, readFileSync, chmodSync } from "node:fs";
@@ -59,6 +59,8 @@ let envPath;
 const seedScript = path.join(moodleDir, "seed", "seed-course.php");
 const activityScript = path.join(moodleDir, "seed", "seed-teacher-activity.php");
 const emptyCourseScript = path.join(moodleDir, "seed", "seed-empty-course.php");
+const pluginsScript = path.join(moodleDir, "seed", "seed-plugins.php");
+const configureScript = path.join(moodleDir, "seed", "configure-plugins.php");
 
 function log(msg) {
   console.log(`[moodle] ${msg}`);
@@ -173,14 +175,21 @@ async function up() {
   log("Levantando contenedores (docker compose up -d)...");
   compose(["up", "-d"]);
   log("Esperando a que la base de datos esté healthy...");
-  const deadline = Date.now() + 60_000;
-  let healthy = false;
-  while (!healthy && Date.now() < deadline) {
-    healthy = runCapture("docker", [...composeBase(), "ps", "db", "--format", "{{.Health}}"]).stdout?.trim() === "healthy";
-    if (!healthy) await sleep(1000);
-  }
+  const healthy = await waitHealthy("db");
   log(healthy ? "Base de datos lista." : "Aviso: la base de datos no confirmó estar healthy en 60s, se continúa igualmente.");
+  // Jobe tarda unos segundos en atender, y CodeRunner da por caído el servidor hasta entonces.
+  log(await waitHealthy("jobe") ? "Jobe listo." : "Aviso: Jobe no confirmó estar healthy en 60s; CodeRunner no corregirá hasta que lo esté.");
   if (healthy && dbHasTables()) installSite();
+}
+
+/** Espera hasta 60 s a que un servicio con healthcheck esté healthy. */
+async function waitHealthy(service) {
+  const deadline = Date.now() + 60_000;
+  while (Date.now() < deadline) {
+    if (runCapture("docker", [...composeBase(), "ps", service, "--format", "{{.Health}}"]).stdout?.trim() === "healthy") return true;
+    await sleep(1000);
+  }
+  return false;
 }
 
 function dbHasTables() {
@@ -199,6 +208,7 @@ function installSite() {
   if (dbHasTables()) {
     log("El sitio ya está instalado: se actualiza al código de la imagen si hace falta (admin/cli/upgrade.php)...");
     composeExec(["php", "admin/cli/upgrade.php", "--non-interactive"]);
+    configurePlugins();
     return;
   }
   const vars = readEnvFile();
@@ -212,6 +222,18 @@ function installSite() {
     `--adminemail=${vars.MOODLE_ADMIN_EMAIL ?? "admin@example.com"}`,
   ]);
   log("Sitio instalado.");
+  configurePlugins();
+}
+
+/** Deja el sitio listo para los plugins de la imagen (seed/configure-plugins.php): CodeRunner
+ * apuntando a Jobe, Chat y Encuesta
+ * activados y los ajustes de plugins sin valor por defecto guardados. Solo cambia lo que falte. */
+function configurePlugins() {
+  putCode(configureScript, "configure-plugins.php");
+  composeExec(["php", "configure-plugins.php"]);
+  // El tema de MOODLE_SANDBOX_THEME (entorno o .env), si se da: como un campus con Classic.
+  const wanted = process.env.MOODLE_SANDBOX_THEME || readEnvFile().MOODLE_SANDBOX_THEME;
+  if (wanted && siteConfig("theme") !== wanted) theme([wanted]);
 }
 
 /** Copia seed/seed-course.php (versionado en el repo) al código de Moodle del contenedor
@@ -257,6 +279,21 @@ function ensureEnvKey(name, value) {
   writeFileSync(envPath, `${raw}${separator}${name}=${value}\n`, "utf-8");
 }
 
+/** Siembra contenido que usa los plugins de la imagen: en el curso de pruebas, un cuestionario con
+ * una pregunta de cada tipo de pregunta instalado; y un curso por formato de curso instalado, con
+ * el profesor y los alumnos matriculados. Lo que ya existe no se toca. */
+function plugins() {
+  putCode(pluginsScript, "seed-plugins.php");
+  const vars = readEnvFile();
+  log("Sembrando contenido de los plugins (cuestionario de tipos de pregunta, un curso por formato)...");
+  composeExec([
+    "env",
+    `MOODLE_TEACHER_USERNAME=${vars.MOODLE_TEACHER_USERNAME ?? "profesor"}`,
+    `MOODLE_STUDENT_USERNAME=${vars.MOODLE_STUDENT_USERNAME ?? "alumno"}`,
+    "php", "seed-plugins.php",
+  ]);
+}
+
 function activity() {
   if (!existsSync(activityScript)) {
     throw new Error(`No se encuentra ${activityScript}`);
@@ -267,6 +304,8 @@ function activity() {
   ensureEnvKey("MOODLE_SEEDED_STUDENTS_PASSWORD", randomPassword());
   composeExec(["env", `MOODLE_SEEDED_STUDENTS_PASSWORD=${readEnvFile().MOODLE_SEEDED_STUDENTS_PASSWORD}`,
     "php", "seed-teacher-activity.php"]);
+  // Los cursos de los plugins se siembran antes que estos alumnos: así quedan matriculados también.
+  plugins();
   runAdhocTasks();
 }
 
@@ -351,11 +390,23 @@ function siteConfig(name) {
   return result.stdout?.trim() || undefined;
 }
 
-/** Cambia el tema del sitio (boost o classic: algunos campus usan Classic) y vacía las
- * cachés. La primera página después tarda: compila el CSS del tema. */
+/** Los plugins de docker/plugins.txt que el sitio tiene instalados, con su versión:
+ * { "qtype_coderunner": "2026051000", ... }. Uno que la serie de Moodle del sitio no tiene, no está. */
+function installedPlugins() {
+  const components = [...new Set(readFileSync(path.join(moodleDir, "docker", "plugins.txt"), "utf-8")
+    .split(/\r?\n/).filter((line) => line.trim() && !line.startsWith("#")).map((line) => line.trim().split(/\s+/)[1]))];
+  const result = runCapture("docker", [
+    ...composeBase(), "exec", "-T", "db", "psql", "-U", "moodle", "-d", "moodle", "-tA", "-F", " ",
+    "-c", `select plugin, value from mdl_config_plugins where name='version' and plugin in (${components.map((c) => `'${c}'`).join(",")}) order by plugin`,
+  ]);
+  return Object.fromEntries((result.stdout ?? "").trim().split(/\r?\n/).filter(Boolean).map((line) => line.split(" ")));
+}
+
+/** Cambia el tema del sitio (boost, classic, que usan algunos campus, o adaptable, de los plugins de
+ * la imagen) y vacía las cachés. La primera página después tarda: compila el CSS del tema. */
 function theme(args) {
   const [name] = args;
-  if (!["boost", "classic"].includes(name)) throw new Error("Uso: npm run theme -- boost|classic [--moodle 4.5]");
+  if (!["boost", "classic", "adaptable"].includes(name)) throw new Error("Uso: npm run theme -- boost|classic|adaptable [--moodle 4.5]");
   composeExec(["php", "admin/cli/cfg.php", "--name=theme", `--set=${name}`]);
   composeExec(["php", "admin/cli/purge_caches.php"]);
   log(`Tema del sitio: ${name}.`);
@@ -393,6 +444,9 @@ function info(args) {
     // Which of the sandboxes this is (`--moodle 4.5` picks the 4.5 one; 5.2 by default).
     moodle: { release: siteConfig("release"), series: site.version.split(".").slice(0, 2).join("."), theme: siteConfig("theme") },
     project: site.project,
+    // The plugins of docker/plugins.txt this site has, with their versions, so a test suite can
+    // skip what a Moodle series leaves out.
+    plugins: installedPlugins(),
   };
   if (json) {
     process.stdout.write(`${JSON.stringify(data, null, 2)}\n`);
@@ -412,6 +466,7 @@ async function setup() {
   await up();
   installSite();
   seed();
+  plugins();
   const vars = readEnvFile();
   log("Sandbox listo:");
   log(`  URL: ${wwwroot()}`);
@@ -420,7 +475,7 @@ async function setup() {
   log(`  Alumno:   ${vars.MOODLE_STUDENT_USERNAME} / ${vars.MOODLE_STUDENT_PASSWORD}`);
 }
 
-const COMMANDS = { env: ensureEnv, build, up, install: installSite, seed, activity, setup, down, reset, status, info, tasks: runAdhocTasks, course, theme };
+const COMMANDS = { env: ensureEnv, build, up, install: installSite, seed, activity, setup, down, reset, status, info, tasks: runAdhocTasks, course, theme, plugins };
 
 const [, , cmd, ...rest] = process.argv;
 if (!cmd || !(cmd in COMMANDS)) {

@@ -22,6 +22,49 @@ out while building `manage.mjs`. Read this before touching the sandbox again.
   go to `public/mod/...` or `mod/...` the same way. In a `RUN` chain, test for it with
   `if [ -d public ]; then ...; fi`, not `[ -d public ] && ...`, which exits 1 on 4.5 and
   stops the `&&` chain.
+- Plugins (`docker/plugins.txt`): `upgrade.php` refuses the whole upgrade ("Dependencies
+  check failed for qtype_formulas") when one plugin's `$plugin->dependencies` isn't in the
+  image; check each `version.php` before adding a plugin (Formulas needs
+  `qbehaviour_adaptivemultipart`, CodeRunner its own behaviour, ddmatch `qtype_match`). The
+  plugins directory's zips name their top folder anything (`moodle-qtype_gapfill-2.32`), so
+  `install-plugins.sh` moves whatever single folder is inside.
+- CodeRunner uses Moodle's `curl` class, which refuses private addresses
+  (`curlsecurityblockedhosts`, `172.16.0.0/12` included, where Docker puts the `jobe`
+  container): it fails with "The sandbox may be down". `docker/config.php` sets
+  `$CFG->curlsecurityblockedhosts` without the private ranges (Docker may also pick
+  `192.168.0.0/16`); `seed/configure-plugins.php` sets `jobe_host=jobe`.
+- CodeRunner looks for its prototypes (python3...) from the question's *course*: in Moodle 5.x,
+  the site's system question bank plus the course's banks. Graded from the system context (a
+  test script with `context_system`), it says "Broken question (missing or duplicate prototype
+  'python3')"; use the quiz's module context.
+- CLI scripts that touch the admin tree must run as admin (`set_user(get_admin())`): without a
+  user, `admin_get_root()` holds 11 settings instead of ~3000, so pending settings look like
+  none. `write_setting()` silently ignores a value its setting doesn't accept (a select given
+  `''`): check `get_setting()` afterwards (`seed/configure-plugins.php`).
+- A data generator call that throws inside `add_moduleinfo()` leaves its delegated transaction
+  open: everything created after it in the same script lands inside it and is rolled back at
+  shutdown, while the script prints it as created. Roll back right away on failure
+  (`rollback_failed_transaction()` in `seed/seed-plugins.php`). Plugin generators may also need
+  a user (calendar events: run as admin) or fields they don't default (Collabora's `format`).
+- `mod_chat` and `mod_survey` exist but are disabled (`mdl_modules.visible = 0`): their pages
+  say "Invalid course module ID". `\core\plugininfo\mod::enable_plugin()` turns them on.
+- `mod_hvp` registers the site with the H5P Hub during install, before and regardless of
+  `hub_is_enabled` (`fetchLibrariesMetadata()` calls the hub first and checks the setting
+  after). Don't block it with `curlsecurityblockedhosts`: Moodle's `curl` then returns an
+  error *text* with no errno, H5P takes it for a reply, finds no uuid and retries forever
+  (an install stuck printing `Attempt to read property "uuid" on null` hundreds of thousands
+  of times). `docker-compose.yml` points `hub-api.h5p.org` at 127.0.0.1 (`extra_hosts`): the
+  connection is refused, curl sets an errno and H5P gives up cleanly. `docker/config.php`
+  forces `hub_is_enabled`/`send_usage_statistics` off (its daily task does respect those).
+- A plugin release made for an older Moodle (`supported` not covering 5.2) still installs: Moodle
+  only refuses `requires` above the site's version or an `incompatible` one. Check it in a real
+  browser, with its console open: on 5.2, `format_onetopic` (5.1) and `format_tiles` (5.1) throw
+  "No define call for core/modal_factory" (removed in 5.2), which only breaks their popups.
+- Checking the site in a browser: a fresh student gets a user tour ("Find your way around")
+  that swallows the first click, so a tile or tab that "doesn't open" may just need a second
+  click; both sites share `localhost`'s `MoodleSession` cookie, so logging in to one logs you
+  out of the other; and the 5.2 login page re-renders after loading, so fill it in once it's
+  settled.
 - `admin/cli/install.php` writes `config.php` as `640 root:root`, which Apache's `www-data`
   can't read. The image ships its own `config.php` (`docker/config.php`, readable, the
   database password and URL from the environment), so the install only runs

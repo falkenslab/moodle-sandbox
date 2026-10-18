@@ -20,6 +20,7 @@
     "tasks": "node manage.mjs tasks",
     "course": "node manage.mjs course",
     "theme": "node manage.mjs theme",
+    "plugins": "node manage.mjs plugins",
     "reset": "node manage.mjs reset"
   }
 }
