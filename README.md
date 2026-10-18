@@ -34,7 +34,7 @@ npm run activity
 | Comando | Qué hace |
 | --- | --- |
 | `npm run setup` | Lo deja todo listo desde cero, o completa lo que falte |
-| `npm run up` | Levanta los contenedores (descarga la imagen si falta) y actualiza Moodle al código de la imagen |
+| `npm run up` | Descarga la versión más nueva de la imagen, levanta los contenedores y actualiza Moodle (y sus plugins) al código de la imagen |
 | `npm run down` | Para los contenedores sin borrar nada |
 | `npm run status` | Estado de los contenedores |
 | `npm run info` | URL, id del curso de pruebas y credenciales; con `-- --json`, para programas y agentes |
@@ -104,6 +104,10 @@ Cuatro contenedores, en el proyecto de Docker `moodle-sandbox`:
 **El sitio vive en dos volúmenes de Docker**: la base de datos (`db_data`) y los ficheros de Moodle (`moodledata_data`). `config.php` va en la imagen y lee la contraseña de la base de datos y la URL del entorno (`docker/config.php`), así que cambiar de imagen no toca los datos.
 
 **PostgreSQL está ajustado para un sitio desechable**: no espera a que cada escritura llegue al disco (`fsync=off`, `synchronous_commit=off`), lo que hace las escrituras mucho más rápidas. A cambio, un corte de luz o un apagado brusco de Docker puede dejar la base de datos inservible. Si después de uno el sitio no arranca o Moodle da errores de base de datos, vuelve a montarlo: `npm run reset -- --yes`, `npm run setup` y, si lo usabas, `npm run activity`.
+
+### Actualizar el sandbox
+
+Cada cambio del sandbox sobre una misma versión de Moodle (plugins nuevos, otra configuración) se publica con la misma etiqueta de imagen (`5.2.4`). `npm run up` busca siempre la versión más nueva de la imagen publicada y, si hay una, recrea los contenedores con ella y actualiza el sitio: Moodle instala los plugins nuevos, `seed/configure-plugins.php` los deja listos. Después, `npm run plugins` siembra el contenido de los plugins nuevos (lo que ya está no lo toca). Sin conexión sigue con la imagen que tenga. Una imagen construida en el equipo (`npm run build`, que la marca como `local`) no se sustituye: para volver a la publicada, bórrala (`docker image rm ghcr.io/falkenslab/moodle-sandbox:5.2.4`) y `npm run up`.
 
 ### Cambiar de versión de Moodle
 

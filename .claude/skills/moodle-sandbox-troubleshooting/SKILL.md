@@ -65,6 +65,10 @@ out while building `manage.mjs`. Read this before touching the sandbox again.
   click; both sites share `localhost`'s `MoodleSession` cookie, so logging in to one logs you
   out of the other; and the 5.2 login page re-renders after loading, so fill it in once it's
   settled.
+- Telling a locally built image from a pulled one: not by `RepoDigests`. With Docker Desktop's
+  containerd image store a local build has them too. The `Dockerfile` labels every image
+  `org.falkenslab.sandbox.build` (`local` unless the workflow passes `SANDBOX_BUILD=<git tag>`),
+  and `pullImage()` in `manage.mjs` skips pulling over a `local` one.
 - `admin/cli/install.php` writes `config.php` as `640 root:root`, which Apache's `www-data`
   can't read. The image ships its own `config.php` (`docker/config.php`, readable, the
   database password and URL from the environment), so the install only runs

@@ -172,6 +172,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 /** Levanta los contenedores (construyendo la imagen si falta). Con el sitio ya instalado,
  * lo actualiza al código de la imagen, que puede ser más nuevo tras un `build`. */
 async function up() {
+  pullImage();
   log("Levantando contenedores (docker compose up -d)...");
   compose(["up", "-d"]);
   log("Esperando a que la base de datos esté healthy...");
@@ -180,6 +181,24 @@ async function up() {
   // Jobe tarda unos segundos en atender, y CodeRunner da por caído el servidor hasta entonces.
   log(await waitHealthy("jobe") ? "Jobe listo." : "Aviso: Jobe no confirmó estar healthy en 60s; CodeRunner no corregirá hasta que lo esté.");
   if (healthy && dbHasTables()) installSite();
+}
+
+/**
+ * Descarga la versión más nueva de la imagen del sitio, si es una publicada: una misma etiqueta
+ * (5.2.4) recibe cada cambio del sandbox sobre ese Moodle, y compose solo la descarga si falta. No
+ * pisa una construida en el equipo (etiqueta org.falkenslab.sandbox.build=local, ver Dockerfile).
+ * Sin conexión, o con una versión sin publicar, sigue con la que haya (o `up` la construye).
+ */
+function pullImage() {
+  const image = `ghcr.io/falkenslab/moodle-sandbox:${site.version}`;
+  const build = runCapture("docker", ["image", "inspect", "--format", '{{index .Config.Labels "org.falkenslab.sandbox.build"}}', image]);
+  if (build.status === 0 && build.stdout.trim() === "local") {
+    log(`La imagen ${image} está construida en este equipo: no se descarga otra.`);
+    return;
+  }
+  log(`Buscando la versión más nueva de ${image}...`);
+  const pull = runCapture("docker", ["pull", "--quiet", image]);
+  if (pull.status !== 0) log(`Aviso: no se pudo descargar ${image}; se sigue con la que haya.`);
 }
 
 /** Espera hasta 60 s a que un servicio con healthcheck esté healthy. */

@@ -36,5 +36,11 @@ RUN bash /tmp/plugins/install-plugins.sh /tmp/plugins/plugins.txt "${MOODLE_VERS
 COPY docker/config.php /var/www/html/config.php
 COPY php/zz-sandbox.ini /usr/local/etc/php/conf.d/zz-sandbox.ini
 
+# De dónde sale la imagen: "local" si se construye en el equipo (npm run build, o up sin poder
+# descargarla), la etiqueta del repositorio si la publica el workflow (v5.2.4-3). `up` descarga la
+# versión más nueva de una imagen publicada, pero no pisa una construida en el equipo.
+ARG SANDBOX_BUILD=local
+
 LABEL org.opencontainers.image.source="https://github.com/falkenslab/moodle-sandbox" \
-      org.opencontainers.image.description="Moodle con su código dentro, para el sandbox de pruebas de falkenslab"
+      org.opencontainers.image.description="Moodle con su código dentro, para el sandbox de pruebas de falkenslab" \
+      org.falkenslab.sandbox.build="${SANDBOX_BUILD}"

@@ -64,7 +64,10 @@ jobs:
         with:
           context: .
           platforms: linux/amd64,linux/arm64
-          build-args: MOODLE_VERSION=${{ steps.version.outputs.moodle }}
+          # SANDBOX_BUILD marca la imagen como publicada: `up` la actualiza (ver Dockerfile).
+          build-args: |
+            MOODLE_VERSION=${{ steps.version.outputs.moodle }}
+            SANDBOX_BUILD=${{ steps.version.outputs.ref }}
           tags: ${{ steps.version.outputs.tags }}
           push: true
           cache-from: type=gha
