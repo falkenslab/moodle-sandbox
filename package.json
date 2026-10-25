@@ -21,6 +21,7 @@
     "course": "node manage.mjs course",
     "theme": "node manage.mjs theme",
     "plugins": "node manage.mjs plugins",
+    "content": "node manage.mjs content",
     "reset": "node manage.mjs reset"
   }
 }

@@ -65,6 +65,23 @@ out while building `manage.mjs`. Read this before touching the sandbox again.
   click; both sites share `localhost`'s `MoodleSession` cookie, so logging in to one logs you
   out of the other; and the 5.2 login page re-renders after loading, so fill it in once it's
   settled.
+- Data generators outside PHPUnit (`seed/seed-content.php`):
+  - the quiz generator's `submit_responses()` calls `get_question_usage()`, which refuses
+    outside tests: load the usage with `question_engine::load_questions_usage_by_activity()` and
+    finish with `process_submit()` + `process_grade_submission()` (5.x) or `process_finish()`
+    (4.5). Responses are the summary strings ("True", "One", "frog"), not arrays;
+  - example questions need a `get_<qtype>_question_form_data_<name>` helper: `true`,
+    `one_of_four`, `frogtoad`, `pi` exist on both series (`frogonly` doesn't);
+  - the rubric generator needs `testing_util` (4.5: require `lib/testing/classes/util.php`;
+    5.x: autoloaded as `core\test\testing_util`, that file is gone) and a user, and its levels are
+    `description => score`;
+  - the feedback generator answers a multichoice with one option only: for several, use
+    `mod_feedback_completion` with `multichoice_<itemid> => [1, 3]`. The questionnaire
+    generator stores yes/no answers as text: insert them in `questionnaire_response_bool`;
+  - 4.5 lacks `mod_choice`'s and `mod_scorm`'s response generators (`choice_user_submit_response()`
+    works on both);
+  - events triggered in a CLI script sit in the log store's buffer until shutdown:
+    `get_log_manager()->dispose()` before touching `logstore_standard_log`.
 - Telling a locally built image from a pulled one: not by `RepoDigests`. With Docker Desktop's
   containerd image store a local build has them too. The `Dockerfile` labels every image
   `org.falkenslab.sandbox.build` (`local` unless the workflow passes `SANDBOX_BUILD=<git tag>`),

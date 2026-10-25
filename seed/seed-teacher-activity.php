@@ -8,8 +8,9 @@
  *
  *   docker compose exec webserver php seed-teacher-activity.php
  *
- * Necesita que seed-course.php se haya ejecutado antes. Si los alumnos extra ya existen,
- * termina sin tocar nada.
+ * Necesita que seed-course.php se haya ejecutado antes. Si los alumnos extra ya están en el
+ * curso, termina sin tocar nada. Los alumnos pueden existir ya (los crea también seed-content.php):
+ * entonces solo se matriculan.
  */
 
 define('CLI_SCRIPT', true);
@@ -71,7 +72,8 @@ function set_known_passwords(): void {
     }
 }
 
-if ($DB->record_exists('user', ['username' => 'lucia.martin'])) {
+$lucia = $DB->get_record('user', ['username' => 'lucia.martin']);
+if ($lucia && is_enrolled(context_course::instance($course->id), $lucia)) {
     // Sembrada por una versión anterior: entregas en borrador y contraseñas desconocidas.
     set_known_passwords();
     $submitted = submit_drafts($course);
@@ -131,7 +133,8 @@ foreach ([
     ['marcos.lopez', 'Marcos', 'López'],
     ['sara.gil', 'Sara', 'Gil'],
 ] as [$username, $firstname, $lastname]) {
-    $user = $generator->create_user([
+    // Puede existir ya, sembrado por seed-content.php.
+    $user = $DB->get_record('user', ['username' => $username]) ?: $generator->create_user([
         'username' => $username,
         'password' => 'Sandbox-' . bin2hex(random_bytes(6)),
         'email' => "{$username}@example.com",

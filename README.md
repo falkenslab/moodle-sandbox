@@ -19,7 +19,7 @@ No hace falta cuenta de GitHub ni construir nada: la imagen de Moodle es públic
 npm run setup
 ```
 
-Deja todo listo: descarga la imagen de Moodle, levanta los contenedores, instala el sitio y siembra el curso de pruebas. La primera vez tarda unos minutos, sobre todo en descargar la imagen (2,4 GB; alrededor de un minuto con una buena conexión); las siguientes, segundos. Es seguro volver a ejecutarlo si se interrumpe o falla a mitad: cada paso se salta si ya está hecho.
+Deja todo listo: descarga la imagen de Moodle, levanta los contenedores, instala el sitio y siembra el curso de pruebas, el curso de contenido de moodle-driver y el contenido de los plugins. La primera vez tarda unos minutos, sobre todo en descargar la imagen (2,4 GB; alrededor de un minuto con una buena conexión); las siguientes, segundos. Es seguro volver a ejecutarlo si se interrumpe o falla a mitad: cada paso se salta si ya está hecho.
 
 Al terminar imprime la URL y las credenciales de admin, profesor y alumno, que también están en todo momento en `.env` y en `npm run info`. El sitio queda en <http://localhost:8080>.
 
@@ -42,6 +42,7 @@ npm run activity
 | `npm run activity` | Añade trabajo para un agente de profesor: alumnos, entregas y dudas en el foro |
 | `npm run course -- <nombre-corto> ["Nombre completo"] [--json]` | Crea un curso vacío con el profesor y los alumnos matriculados |
 | `npm run tasks` | Ejecuta ya las tareas pendientes de Moodle, sin esperar al cron |
+| `npm run content` | Siembra el curso de contenido que lee la batería de moodle-driver (`mcp-content`); `setup` ya lo hace |
 | `npm run plugins` | Siembra contenido que usa los plugins: un cuestionario con sus tipos de pregunta, un curso por formato y uno con sus actividades y bloques (ver [Plugins](#plugins)); `setup` ya lo hace |
 | `npm run theme -- classic\|boost\|adaptable` | Cambia el tema del sitio (Boost por defecto; algunos campus usan Classic) y vacía las cachés |
 | `npm run build` | Construye la imagen aquí en vez de descargarla (otra versión de Moodle, un cambio del `Dockerfile`); después, `npm run up` |
@@ -148,6 +149,20 @@ Las versiones anteriores del sandbox clonaban Moodle en la carpeta `src/` y la m
 
 Los tres comparten una contraseña que se guarda en `.env` (`MOODLE_SEEDED_STUDENTS_PASSWORD`) y aparece en `npm run info`, para poder entrar como cualquiera de ellos. Se puede ejecutar más de una vez: si ya está sembrada, solo repara lo que falte (entregas en borrador, contraseñas).
 
+### El curso de contenido de moodle-driver
+
+`npm run content` (`seed/seed-content.php`, que `setup` ya ejecuta) crea `mcp-content`, «Contenido para moodle-mcp»: el curso que lee la batería de pruebas de moodle-driver sin escribir nunca en él. Tiene una actividad de cada tipo y datos en ellas:
+
+- **Personas**: el profesor y cuatro alumnos (`alumno` y los tres sembrados, que crea si no existen), y un grupo.
+- **Tarea MCP**: con la rúbrica «Rúbrica MCP», entregada por Lucía y Marcos y calificada con ella.
+- **Cuestionario MCP**: seis preguntas con intentos terminados de tres alumnos; otro cuestionario sin intentos.
+- **Encuestas**: un feedback anónimo (con una pregunta de varias opciones respondida con varias) y un questionnaire con un tipo de pregunta de cada, los dos respondidos por tres alumnos.
+- **Foros**: uno de presentación y «Foro MCP», con ocho debates y sus respuestas.
+- **El resto**: página, libro, enlace, etiqueta, fichero, carpeta, H5P, lección, consulta respondida, dos SCORM y, en 5.x, un banco de preguntas.
+- **Visitas**: de los alumnos y el profesor, una hora antes (los informes de actividad y de participación tienen datos).
+
+La batería encuentra el curso por su nombre corto y la tarea por su nombre, así que es el mismo en las dos series aunque cambien los ids. Si el curso ya existe, no lo toca.
+
 ### Cursos vacíos para construir
 
 `npm run course -- docker-intro "Introducción a Docker"` crea un curso vacío con el profesor (como `editingteacher`) y los alumnos sembrados matriculados, para que un agente de profesor lo construya entero. Si ya existe un curso con ese nombre corto no lo toca y devuelve su id. Con `--json` imprime solo `{ id, shortname, fullname, url, created }`.
@@ -189,7 +204,8 @@ Cada vez que instala o actualiza el sitio, `manage.mjs` ejecuta `seed/configure-
   "students": [ { "username": "lucia.martin", "password": "..." }, ... ],
   "moodle": { "release": "5.2.4 (Build: 20261005)", "series": "5.2", "theme": "boost" },
   "project": "moodle-sandbox",
-  "plugins": { "qtype_coderunner": "2026051000", "qtype_formulas": "2026100800", ... } }
+  "plugins": { "qtype_coderunner": "2026051000", "qtype_formulas": "2026100800", ... },
+  "contentCourse": { "id": 3, "shortname": "mcp-content" } }
 ```
 
 `plugins` son los de `docker/plugins.txt` que el sitio tiene instalados, con su versión: una batería de pruebas puede saltarse lo que una serie de Moodle no tenga. Con `--moodle 4.5`, el mismo JSON del sitio de 4.5.
@@ -211,6 +227,7 @@ Un programa debería depender solo de este comando, no de `.env` ni de la base d
 │   ├── seed-course.php            # crea el curso, el profesor, el alumno y las actividades
 │   ├── seed-teacher-activity.php  # alumnos, entregas y dudas para un agente de profesor
 │   ├── seed-empty-course.php      # curso vacío para construir (npm run course)
+│   ├── seed-content.php           # el curso de contenido de moodle-driver (npm run content)
 │   ├── seed-plugins.php           # contenido de los plugins: cuestionario, cursos por formato y de actividades (npm run plugins)
 │   └── configure-plugins.php      # deja el sitio listo para los plugins (tras instalar o actualizar)
 ├── .env                 # credenciales generadas (se crea solo, no se sube al repo)

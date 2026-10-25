@@ -6,7 +6,7 @@
  * el problema de Git Bash reescribiendo argumentos que parecen rutas absolutas de
  * Unix (`/var/www/html`, etc.) al pasarlos a `docker compose exec`.
  *
- * Uso: node manage.mjs <env|build|up|install|seed|setup|down|reset|status|info|tasks|course|activity|theme|plugins>
+ * Uso: node manage.mjs <env|build|up|install|seed|setup|down|reset|status|info|tasks|course|activity|theme|plugins|content>
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, rmSync, writeFileSync, readFileSync, chmodSync } from "node:fs";
@@ -60,6 +60,7 @@ const seedScript = path.join(moodleDir, "seed", "seed-course.php");
 const activityScript = path.join(moodleDir, "seed", "seed-teacher-activity.php");
 const emptyCourseScript = path.join(moodleDir, "seed", "seed-empty-course.php");
 const pluginsScript = path.join(moodleDir, "seed", "seed-plugins.php");
+const contentScript = path.join(moodleDir, "seed", "seed-content.php");
 const configureScript = path.join(moodleDir, "seed", "configure-plugins.php");
 
 function log(msg) {
@@ -313,6 +314,26 @@ function plugins() {
   ]);
 }
 
+/**
+ * Crea el curso de contenido que lee la batería de pruebas de moodle-driver ("mcp-content",
+ * seed/seed-content.php): una actividad de cada tipo, con entregas, intentos, respuestas, debates,
+ * notas y visitas. Crea a los alumnos sembrados si faltan. No hace nada si el curso ya existe.
+ */
+function content() {
+  putCode(contentScript, "seed-content.php");
+  // La contraseña conocida de los alumnos sembrados, como en `activity`.
+  ensureEnvKey("MOODLE_SEEDED_STUDENTS_PASSWORD", randomPassword());
+  const vars = readEnvFile();
+  log("Sembrando el curso de contenido de moodle-driver (mcp-content)...");
+  composeExec([
+    "env",
+    `MOODLE_TEACHER_USERNAME=${vars.MOODLE_TEACHER_USERNAME ?? "profesor"}`,
+    `MOODLE_STUDENT_USERNAME=${vars.MOODLE_STUDENT_USERNAME ?? "alumno"}`,
+    `MOODLE_SEEDED_STUDENTS_PASSWORD=${vars.MOODLE_SEEDED_STUDENTS_PASSWORD}`,
+    "php", "seed-content.php",
+  ]);
+}
+
 function activity() {
   if (!existsSync(activityScript)) {
     throw new Error(`No se encuentra ${activityScript}`);
@@ -391,10 +412,10 @@ function isRunning() {
   return result.stdout?.trim() === "running";
 }
 
-function courseId() {
+function courseId(shortname = "sandbox-course") {
   const result = runCapture("docker", [
     ...composeBase(), "exec", "-T", "db", "psql", "-U", "moodle", "-d", "moodle",
-    "-tAc", "select id from mdl_course where shortname='sandbox-course'",
+    "-tAc", `select id from mdl_course where shortname='${shortname}'`,
   ]);
   const id = Number(result.stdout?.trim());
   return Number.isInteger(id) && id > 0 ? id : undefined;
@@ -466,6 +487,8 @@ function info(args) {
     // The plugins of docker/plugins.txt this site has, with their versions, so a test suite can
     // skip what a Moodle series leaves out.
     plugins: installedPlugins(),
+    // The content course moodle-driver's suite reads (`npm run content`; null until seeded).
+    contentCourse: courseId("mcp-content") ? { id: courseId("mcp-content"), shortname: "mcp-content" } : null,
   };
   if (json) {
     process.stdout.write(`${JSON.stringify(data, null, 2)}\n`);
@@ -485,6 +508,8 @@ async function setup() {
   await up();
   installSite();
   seed();
+  // Antes que los plugins: su primera actividad es el módulo 5 de un sitio nuevo (ver seed-content.php).
+  content();
   plugins();
   const vars = readEnvFile();
   log("Sandbox listo:");
@@ -494,7 +519,7 @@ async function setup() {
   log(`  Alumno:   ${vars.MOODLE_STUDENT_USERNAME} / ${vars.MOODLE_STUDENT_PASSWORD}`);
 }
 
-const COMMANDS = { env: ensureEnv, build, up, install: installSite, seed, activity, setup, down, reset, status, info, tasks: runAdhocTasks, course, theme, plugins };
+const COMMANDS = { env: ensureEnv, build, up, install: installSite, seed, activity, setup, down, reset, status, info, tasks: runAdhocTasks, course, theme, plugins, content };
 
 const [, , cmd, ...rest] = process.argv;
 if (!cmd || !(cmd in COMMANDS)) {
