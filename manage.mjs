@@ -6,10 +6,10 @@
  * el problema de Git Bash reescribiendo argumentos que parecen rutas absolutas de
  * Unix (`/var/www/html`, etc.) al pasarlos a `docker compose exec`.
  *
- * Uso: node manage.mjs <env|build|up|install|seed|setup|down|reset|status|info|tasks|course|activity|theme|plugins|content>
+ * Uso: node manage.mjs <env|build|up|install|seed|setup|down|reset|status|info|tasks|course|activity|theme|plugins|content|h5p>
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, rmSync, writeFileSync, readFileSync, chmodSync } from "node:fs";
+import { existsSync, rmSync, writeFileSync, readFileSync, chmodSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
@@ -61,6 +61,10 @@ const activityScript = path.join(moodleDir, "seed", "seed-teacher-activity.php")
 const emptyCourseScript = path.join(moodleDir, "seed", "seed-empty-course.php");
 const pluginsScript = path.join(moodleDir, "seed", "seed-plugins.php");
 const contentScript = path.join(moodleDir, "seed", "seed-content.php");
+const h5pScript = path.join(moodleDir, "seed", "install-h5p.php");
+const h5pList = path.join(moodleDir, "docker", "h5p-content-types.txt");
+// Los paquetes de tipos de contenido H5P descargados en el equipo (fuera de git): ver h5p().
+const h5pCache = path.join(moodleDir, "seed", "h5p");
 const configureScript = path.join(moodleDir, "seed", "configure-plugins.php");
 
 function log(msg) {
@@ -334,6 +338,35 @@ function content() {
   ]);
 }
 
+/**
+ * Instala los tipos de contenido H5P de docker/h5p-content-types.txt sin que el sitio hable con
+ * h5p.org (docker-compose.yml lo apunta a 127.0.0.1): los descarga aquí, en el equipo, a la caché
+ * seed/h5p/ si faltan, los copia al contenedor y seed/install-h5p.php los instala. Sin conexión,
+ * instala los que ya estén en la caché. Para actualizar uno, se borra su fichero de la caché.
+ */
+async function h5p() {
+  const types = readFileSync(h5pList, "utf-8").split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith("#"));
+  mkdirSync(h5pCache, { recursive: true });
+  for (const type of types) {
+    const file = path.join(h5pCache, `${type}.h5p`);
+    if (existsSync(file)) continue;
+    log(`Descargando el tipo de contenido H5P ${type} (hub-api.h5p.org, desde este equipo)...`);
+    try {
+      const response = await fetch(`https://hub-api.h5p.org/v1/content-types/${type}`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      writeFileSync(file, Buffer.from(await response.arrayBuffer()));
+    } catch (error) {
+      log(`Aviso: no se pudo descargar ${type} (${error.message}); se instalan los que haya en la caché.`);
+    }
+  }
+  putCode(h5pScript, "install-h5p.php");
+  composeExec(["rm", "-rf", "/tmp/h5p-content-types"]);
+  run("docker", [...composeBase(), "cp", h5pCache, "webserver:/tmp/h5p-content-types"]);
+  log("Instalando los tipos de contenido H5P...");
+  composeExec(["php", "install-h5p.php", "/tmp/h5p-content-types"]);
+  composeExec(["rm", "-rf", "/tmp/h5p-content-types"]);
+}
+
 function activity() {
   if (!existsSync(activityScript)) {
     throw new Error(`No se encuentra ${activityScript}`);
@@ -511,6 +544,7 @@ async function setup() {
   // Antes que los plugins: su primera actividad es el módulo 5 de un sitio nuevo (ver seed-content.php).
   content();
   plugins();
+  await h5p();
   const vars = readEnvFile();
   log("Sandbox listo:");
   log(`  URL: ${wwwroot()}`);
@@ -519,7 +553,7 @@ async function setup() {
   log(`  Alumno:   ${vars.MOODLE_STUDENT_USERNAME} / ${vars.MOODLE_STUDENT_PASSWORD}`);
 }
 
-const COMMANDS = { env: ensureEnv, build, up, install: installSite, seed, activity, setup, down, reset, status, info, tasks: runAdhocTasks, course, theme, plugins, content };
+const COMMANDS = { env: ensureEnv, build, up, install: installSite, seed, activity, setup, down, reset, status, info, tasks: runAdhocTasks, course, theme, plugins, content, h5p };
 
 const [, , cmd, ...rest] = process.argv;
 if (!cmd || !(cmd in COMMANDS)) {

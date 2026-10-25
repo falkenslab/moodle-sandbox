@@ -4,3 +4,5 @@ src/
 .env
 .env.*
 *.log
+# Los paquetes de tipos de contenido H5P que descarga `npm run h5p` (docker/h5p-content-types.txt)
+seed/h5p/

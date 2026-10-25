@@ -22,6 +22,7 @@
     "theme": "node manage.mjs theme",
     "plugins": "node manage.mjs plugins",
     "content": "node manage.mjs content",
+    "h5p": "node manage.mjs h5p",
     "reset": "node manage.mjs reset"
   }
 }

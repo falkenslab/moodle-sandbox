@@ -1,0 +1,15 @@
+# Los tipos de contenido H5P que el sandbox instala (npm run h5p, que setup ejecuta). El sitio no habla
+# con h5p.org (docker-compose.yml lo apunta a 127.0.0.1): manage.mjs descarga cada uno en el equipo,
+# en la caché seed/h5p/ (fuera de git), y seed/install-h5p.php lo instala desde ahí, con sus
+# dependencias. Para actualizarlos, borra la caché (o un fichero de ella) y vuelve a ejecutarlo.
+#
+# Un tipo por línea: su nombre de máquina en el Hub de H5P.
+H5P.MultiChoice
+H5P.TrueFalse
+H5P.Blanks
+H5P.DragText
+H5P.Dialogcards
+H5P.Flashcards
+H5P.QuestionSet
+H5P.CoursePresentation
+H5P.InteractiveVideo

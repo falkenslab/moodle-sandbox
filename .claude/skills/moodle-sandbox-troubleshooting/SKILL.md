@@ -56,6 +56,13 @@ out while building `manage.mjs`. Read this before touching the sandbox again.
   of times). `docker-compose.yml` points `hub-api.h5p.org` at 127.0.0.1 (`extra_hosts`): the
   connection is refused, curl sets an errno and H5P gives up cleanly. `docker/config.php`
   forces `hub_is_enabled`/`send_usage_statistics` off (its daily task does respect those).
+- Pointing h5p.org at 127.0.0.1 also stops core's `\core\task\h5p_get_content_types_task`, so a
+  site has only the H5P types its seeds brought (a content-only `.h5p` won't deploy).
+  `npm run h5p` downloads the types on the host (`GET hub-api.h5p.org/v1/content-types/<name>`
+  answers without registration: a libraries-only package) and `seed/install-h5p.php` does what
+  `core_h5p\core::fetch_content_type()` does after downloading: the file in
+  `core_h5p/library_sources`, `helper::save_h5p($factory, $file, (object) [], false, true)`,
+  delete it. Types pulled in as dependencies of an earlier one then show as "ya está".
 - A plugin release made for an older Moodle (`supported` not covering 5.2) still installs: Moodle
   only refuses `requires` above the site's version or an `incompatible` one. Check it in a real
   browser, with its console open: on 5.2, `format_onetopic` (5.1) and `format_tiles` (5.1) throw

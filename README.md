@@ -42,6 +42,7 @@ npm run activity
 | `npm run activity` | Añade trabajo para un agente de profesor: alumnos, entregas y dudas en el foro |
 | `npm run course -- <nombre-corto> ["Nombre completo"] [--json]` | Crea un curso vacío con el profesor y los alumnos matriculados |
 | `npm run tasks` | Ejecuta ya las tareas pendientes de Moodle, sin esperar al cron |
+| `npm run h5p` | Instala los tipos de contenido H5P de `docker/h5p-content-types.txt`, descargados en el equipo (ver [Tipos de contenido H5P](#tipos-de-contenido-h5p)); `setup` ya lo hace |
 | `npm run content` | Siembra el curso de contenido que lee la batería de moodle-driver (`mcp-content`); `setup` ya lo hace |
 | `npm run plugins` | Siembra contenido que usa los plugins: un cuestionario con sus tipos de pregunta, un curso por formato y uno con sus actividades y bloques (ver [Plugins](#plugins)); `setup` ya lo hace |
 | `npm run theme -- classic\|boost\|adaptable` | Cambia el tema del sitio (Boost por defecto; algunos campus usan Classic) y vacía las cachés |
@@ -177,7 +178,7 @@ Un campus de verdad tiene plugins que Moodle no trae, y un programa que trabaja 
 - **Formatos de curso**: `format_grid`, `format_topcoll` (Collapsed Topics), `format_onetopic` y `format_tiles`.
 - **Informes, editor y tema**: `report_coursesize`, `report_benchmark`, `tiny_fontcolor` (color de letra en TinyMCE) y `theme_adaptable`. El campus usa el tema Classic, que viene con Moodle: `npm run theme -- classic` (o `adaptable`, o `boost`, el de siempre).
 
-**Lo que necesita un servicio de fuera** se instala sin él: las actividades de Collabora y de Jitsi se crean, pero no abren documentos ni videollamadas. H5P se instala sin hablar con su Hub: `docker-compose.yml` apunta el Hub a `127.0.0.1` en los contenedores de Moodle (si no, H5P registra el sitio al instalarse) y el `config.php` de la imagen apaga su consulta diaria y sus estadísticas de uso. Por eso no descarga tipos de contenido.
+**Lo que necesita un servicio de fuera** se instala sin él: las actividades de Collabora y de Jitsi se crean, pero no abren documentos ni videollamadas. H5P se instala sin hablar con su Hub: `docker-compose.yml` apunta el Hub a `127.0.0.1` en los contenedores de Moodle (si no, H5P registra el sitio al instalarse) y el `config.php` de la imagen apaga su consulta diaria y sus estadísticas de uso. Por eso el sitio no descarga tipos de contenido: los instala `npm run h5p` (ver abajo).
 
 **En 5.2**, varios no tienen versión para 5.2 y llevan la más nueva que hay: `format_grid`, `mod_hotpot` (de 5.0), `format_onetopic`, `format_tiles`, `mod_choicegroup`, `mod_lightboxgallery`, `report_benchmark` (de 5.1), `block_grade_me`, `block_quickmail` y `report_coursesize` (de 4.5). Todos se instalan en 5.2 y sus páginas cargan sin errores. Lo único que falla: Onetopic y Tiles no abren sus ventanas emergentes (la ayuda de los iconos, las actividades configuradas para abrirse en una), porque usan un módulo de Moodle (`core/modal_factory`) que 5.2 ya no tiene. Ninguno se queda fuera de 5.2.
 
@@ -190,6 +191,14 @@ Un campus de verdad tiene plugins que Moodle no trae, y un programa que trabaja 
 Los cursos tienen matriculados al profesor y a los alumnos sembrados. Lo que ya existe no lo vuelve a crear, así que se puede ejecutar de nuevo después de actualizar la imagen.
 
 Cada vez que instala o actualiza el sitio, `manage.mjs` ejecuta `seed/configure-plugins.php`, que deja el sitio listo para estos plugins: CodeRunner apuntando a `http://jobe`, Chat y Encuesta activados, y los ajustes de plugins que no traen valor por defecto guardados (si no, Moodle manda al administrador a la página de ajustes nuevos). Para que Moodle pueda llegar a `jobe`, el `config.php` de la imagen quita las redes privadas de las direcciones que Moodle no deja consultar (`curlsecurityblockedhosts`): Docker pone sus contenedores en una. La imagen de Jobe solo existe para amd64: en un Mac con chip M funciona emulada, más despacio.
+
+### Tipos de contenido H5P
+
+El sitio no habla con h5p.org, así que no puede descargar tipos de contenido H5P (los que hacen funcionar un paquete `.h5p` que solo trae contenido). `npm run h5p`, que `setup` ya ejecuta, los descarga en el equipo, desde el Hub de H5P, a la caché `seed/h5p/` (fuera de git), y los instala en el sitio desde ahí, con sus dependencias. Son los de `docker/h5p-content-types.txt`:
+
+- `H5P.MultiChoice`, `H5P.TrueFalse`, `H5P.Blanks`, `H5P.DragText`, `H5P.Dialogcards`, `H5P.Flashcards`, `H5P.QuestionSet`, `H5P.CoursePresentation` e `H5P.InteractiveVideo`; con ellos llegan otros, como `H5P.DragQuestion`, `H5P.MarkTheWords`, `H5P.SingleChoiceSet` o `H5P.Summary`.
+
+Para añadir uno, escribe su nombre de máquina en la lista y ejecuta `npm run h5p`. Para actualizarlos, borra la caché (o el fichero de ese tipo) y vuelve a ejecutarlo: un tipo que el sitio ya tiene en esa versión, o en una más nueva, no se toca. Sin conexión, instala los que haya en la caché.
 
 ## Usarlo desde un programa o un agente
 
@@ -218,6 +227,7 @@ Un programa debería depender solo de este comando, no de `.env` ni de la base d
 ├── manage.mjs           # el script detrás de los comandos npm
 ├── Dockerfile           # la imagen: Moodle con su código y dependencias dentro
 ├── docker/config.php    # el config.php de la imagen (lee la contraseña y la URL del entorno)
+├── docker/h5p-content-types.txt  # los tipos de contenido H5P que instala npm run h5p
 ├── docker/plugins.txt   # los plugins de la imagen, con su versión para cada serie de Moodle
 ├── docker/install-plugins.sh    # los instala al construir la imagen
 ├── php/zz-sandbox.ini   # PHP ajustado para Moodle (la caché de código)
@@ -229,7 +239,9 @@ Un programa debería depender solo de este comando, no de `.env` ni de la base d
 │   ├── seed-empty-course.php      # curso vacío para construir (npm run course)
 │   ├── seed-content.php           # el curso de contenido de moodle-driver (npm run content)
 │   ├── seed-plugins.php           # contenido de los plugins: cuestionario, cursos por formato y de actividades (npm run plugins)
-│   └── configure-plugins.php      # deja el sitio listo para los plugins (tras instalar o actualizar)
+│   ├── configure-plugins.php      # deja el sitio listo para los plugins (tras instalar o actualizar)
+│   ├── install-h5p.php            # instala los tipos de contenido H5P de la caché (npm run h5p)
+│   └── h5p/                       # la caché de tipos de contenido H5P descargados (fuera de git)
 ├── .env                 # credenciales generadas (se crea solo, no se sube al repo)
 └── .env.moodle-sandbox-45       # las del sitio de Moodle 4.5, si lo hay
 ```
