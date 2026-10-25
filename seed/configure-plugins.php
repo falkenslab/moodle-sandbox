@@ -1,22 +1,22 @@
 <?php
 /**
- * Deja el sitio listo para usar los plugins de la imagen (docker/plugins.txt). Lo ejecuta manage.mjs
- * después de cada instalación o actualización del sitio:
+ * Gets the site ready to use the image's plugins (docker/plugins.txt). manage.mjs runs it after
+ * every install or upgrade of the site:
  *
  *   docker compose exec webserver php configure-plugins.php
  *
- * Solo cambia lo que falte, así que se puede ejecutar cuantas veces haga falta, y se salta lo de un
- * plugin que la imagen no tenga.
+ * It only changes what's missing, so it can run as many times as needed, and it skips whatever
+ * belongs to a plugin the image doesn't have.
  */
 
 define('CLI_SCRIPT', true);
 require(__DIR__ . '/config.php');
 require_once($CFG->libdir . '/clilib.php');
 require_once($CFG->libdir . '/adminlib.php');
-// Como el administrador: sin usuario, el árbol de administración solo tiene lo que ve cualquiera.
+// As the admin: without a user, the admin tree only holds what anyone can see.
 \core\session\manager::set_user(get_admin());
 
-/** Cambia un ajuste si no tiene ya ese valor, y lo dice. */
+/** Changes a setting unless it already has that value, and says so. */
 function set_config_if(string $name, string $value, ?string $plugin, string $why): void {
     if ((string) get_config($plugin ?? 'core', $name) !== $value) {
         set_config($name, $value, $plugin);
@@ -24,25 +24,25 @@ function set_config_if(string $name, string $value, ?string $plugin, string $why
     }
 }
 
-// CodeRunner ejecuta el código de las respuestas en el contenedor jobe (docker-compose.yml).
+// CodeRunner runs the answers' code in the jobe container (docker-compose.yml).
 if (core_component::get_component_directory('qtype_coderunner')) {
-    set_config_if('jobe_host', 'jobe', 'qtype_coderunner', 'CodeRunner ejecuta el código en el contenedor jobe.');
+    set_config_if('jobe_host', 'jobe', 'qtype_coderunner', 'CodeRunner runs the code in the jobe container.');
 }
 
-// Que Moodle llegue a jobe (las redes privadas) y que H5P no hable con su Hub lo fija docker/config.php,
-// para que valga ya durante la instalación.
+// Moodle reaching jobe (the private networks) and H5P not talking to its Hub are set in
+// docker/config.php, so they already hold during the install.
 
-// Chat y Encuesta predefinida vienen desactivados (Moodle los retira), pero los campus los usan.
+// Chat and Survey ship disabled (Moodle is retiring them), but campuses use them.
 foreach (['chat', 'survey'] as $module) {
     if (core_component::get_component_directory("mod_$module") && !$DB->get_field('modules', 'visible', ['name' => $module])) {
         \core\plugininfo\mod::enable_plugin($module, 1);
-        cli_writeln("mod_$module: activado.");
+        cli_writeln("mod_$module: enabled.");
     }
 }
 
-// Ajustes de plugins sin valor por defecto: hasta que alguien los guarde, Moodle manda al
-// administrador a la página de ajustes nuevos. Se guardan con su primera opción (un desplegable) o
-// vacíos; write_setting() no guarda un valor que no admite, y entonces se escribe vacío sin más.
+// Plugin settings without a default: until someone saves them, Moodle sends the admin to the
+// new-settings page. They're saved with their first choice (a dropdown) or empty; write_setting()
+// doesn't save a value it doesn't accept, and then an empty one is written directly.
 $pending = [];
 $walk = function (part_of_admin_tree $node) use (&$walk, &$pending) {
     if ($node instanceof admin_category) {
@@ -68,7 +68,7 @@ foreach ($pending as $setting) {
         set_config($setting->name, '', $setting->plugin);
     }
     $name = ($setting->plugin ? "$setting->plugin/" : '') . $setting->name;
-    cli_writeln($setting->get_setting() === null ? "$name: no se pudo guardar." : "$name: guardado (no tenía valor por defecto).");
+    cli_writeln($setting->get_setting() === null ? "$name: could not be saved." : "$name: saved (it had no default).");
 }
 
 cli_writeln('OK');

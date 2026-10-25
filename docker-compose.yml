@@ -1,11 +1,11 @@
-# Nombre fijo del proyecto: los contenedores y volúmenes no dependen de cómo se llame
-# la carpeta del clon. Otro nombre (MOODLE_SANDBOX_PROJECT) es otro sitio, con sus propios
-# volúmenes: así conviven el de Moodle 5.2 y el de 4.5 (manage.mjs --moodle 4.5).
+# A fixed project name: the containers and volumes don't depend on the name of the clone's
+# folder. Another name (MOODLE_SANDBOX_PROJECT) is another site, with its own volumes: that's how
+# the Moodle 5.2 and the 4.5 sites live side by side (manage.mjs --moodle 4.5).
 name: ${MOODLE_SANDBOX_PROJECT:-moodle-sandbox}
 
-# La imagen del sandbox (Dockerfile): Moodle con su código dentro. El webserver y el cron la
-# comparten. Su etiqueta es la versión de Moodle que lleva (MOODLE_VERSION): `up` la descarga
-# de GitHub si está publicada y, si no (o sin conexión), la construye aquí con el Dockerfile.
+# The sandbox's image (Dockerfile): Moodle with its code inside. The webserver and the cron share
+# it. Its tag is the Moodle version it carries (MOODLE_VERSION): `up` pulls it from GitHub if it's
+# published and, if not (or offline), builds it here with the Dockerfile.
 x-moodle: &moodle
   build:
     context: .
@@ -17,16 +17,16 @@ x-moodle: &moodle
   depends_on:
     db:
       condition: service_healthy
-  # Sin APACHE_DOCUMENT_ROOT: la imagen base sirve /var/www/html/public si existe (Moodle 5.1 y
-  # siguientes) y /var/www/html si no (4.5).
+  # No APACHE_DOCUMENT_ROOT: the base image serves /var/www/html/public if it exists (Moodle 5.1
+  # and later) and /var/www/html if not (4.5).
   environment:
-    # Lo que config.php lee del entorno (docker/config.php).
+    # What config.php reads from the environment (docker/config.php).
     - MOODLE_DB_PASSWORD=${MOODLE_DB_PASSWORD}
     - MOODLE_WWWROOT=${MOODLE_SANDBOX_URL:-http://localhost:${MOODLE_SANDBOX_PORT:-8080}}
   volumes:
     - moodledata_data:/var/www/moodledata
-  # El Hub de H5P, a ninguna parte: mod_hvp registra el sitio en él al instalarse, y un sandbox no
-  # habla con servicios de fuera (ver docker/config.php).
+  # H5P's Hub, pointing nowhere: mod_hvp registers the site with it when installed, and a sandbox
+  # doesn't talk to outside services (see docker/config.php).
   extra_hosts:
     - "hub-api.h5p.org:127.0.0.1"
     - "h5p.org:127.0.0.1"
@@ -35,9 +35,9 @@ services:
   db:
     image: postgres:17
     restart: unless-stopped
-    # Un sandbox desechable: sin esperar a que cada escritura llegue al disco, las escrituras
-    # van mucho más rápidas. A cambio, un corte de luz o un apagado brusco de Docker puede
-    # dejar la base de datos inservible (se rehace con `npm run reset -- --yes` y `setup`).
+    # A disposable sandbox: without waiting for every write to reach the disk, writes are much
+    # faster. In exchange, a power cut or a hard Docker stop can leave the database unusable
+    # (rebuilt with `npm run reset -- --yes` and `setup`).
     command: ["postgres", "-c", "fsync=off", "-c", "synchronous_commit=off", "-c", "full_page_writes=off", "-c", "shared_buffers=256MB"]
     environment:
       - POSTGRES_USER=moodle
@@ -54,23 +54,23 @@ services:
   webserver:
     <<: *moodle
     ports:
-      # MOODLE_SANDBOX_PORT se puede fijar en .env si el 8080 ya está ocupado.
+      # MOODLE_SANDBOX_PORT can be set in .env if 8080 is already taken.
       - "${MOODLE_SANDBOX_PORT:-8080}:80"
 
-  # El cron de Moodle, cada minuto, como en un sitio de verdad: ejecuta las tareas programadas
-  # y las ad hoc (copias de seguridad y de cursos, restauraciones, envío de notificaciones…).
+  # Moodle's cron, every minute, as on a real site: it runs the scheduled and the ad hoc tasks
+  # (backups and course copies, restores, sending notifications...).
   cron:
     <<: *moodle
     entrypoint: ["bash", "-c", "while true; do php /var/www/html/admin/cli/cron.php; sleep 60; done"]
 
-  # Jobe, el servidor donde CodeRunner ejecuta el código de las respuestas contra sus casos de
-  # prueba (http://jobe, ajustado por manage.mjs). Sin puerto en el equipo: solo lo usa Moodle.
-  # Fijado por su digest (solo publica "latest"); solo para amd64, en Mac con chip M va emulado.
+  # Jobe, the server where CodeRunner runs the answers' code against their test cases
+  # (http://jobe, set by manage.mjs). No port on the machine: only Moodle uses it. Pinned by its
+  # digest (it only publishes "latest"); amd64 only, emulated on Apple silicon Macs.
   jobe:
     image: trampgeek/jobeinabox@sha256:b442c8e63f016ff33aa2b6f28c36abc8ebd30cbb39e8e025cadeec2107c5ce85
     restart: unless-stopped
-    # La comprobación de la imagen, cada 5 s en vez de cada minuto: `up` espera a que Jobe
-    # responda, y hasta la primera comprobación no se sabe.
+    # The image's health check, every 5 s instead of every minute: `up` waits for Jobe to answer,
+    # and until the first check it isn't known.
     healthcheck:
       test: ["CMD-SHELL", "/usr/bin/python3 /var/www/html/jobe/minimaltest.py || exit 1"]
       interval: 5s

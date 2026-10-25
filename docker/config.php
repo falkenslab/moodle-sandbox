@@ -1,8 +1,8 @@
 <?php  // Moodle configuration file
 
-// El config.php del sandbox, dentro de su imagen (ver Dockerfile): la contraseña de la base de
-// datos y la URL vienen del entorno del contenedor (docker-compose.yml las toma de .env), así
-// que la misma imagen sirve a cualquier instalación.
+// The sandbox's config.php, inside its image (see Dockerfile): the database password and the URL
+// come from the container's environment (docker-compose.yml takes them from .env), so the same
+// image serves any installation.
 
 unset($CFG);
 global $CFG;
@@ -27,15 +27,16 @@ $CFG->admin     = 'admin';
 
 $CFG->directorypermissions = 02777;
 
-// Las direcciones que Moodle no deja pedir, fijadas aquí para que valgan ya durante la instalación:
-// sin las redes privadas de la lista de Moodle, porque los contenedores del sandbox (jobe, para
-// CodeRunner) están en una, la que Docker elija.
+// The addresses Moodle won't request, set here so they already hold during the installation:
+// without the private networks in Moodle's list, because the sandbox's containers (jobe, for
+// CodeRunner) are on one, whichever Docker picks.
 $CFG->curlsecurityblockedhosts = "169.254.169.254";
 
-// Un sandbox no habla con servicios de fuera. H5P (mod_hvp) registra el sitio en su Hub al instalarse,
-// sin mirar ningún ajuste: docker-compose.yml apunta el Hub a 127.0.0.1, y la petición falla (no
-// sirve bloquearlo aquí: con la respuesta de Moodle, H5P se queda en un bucle). Y no consulta su
-// Hub ni le manda estadísticas de uso cada día (su tarea programada sí mira estos ajustes).
+// A sandbox doesn't talk to outside services. H5P (mod_hvp) registers the site with its Hub when
+// installed, whatever its settings: docker-compose.yml points the Hub at 127.0.0.1, and the request
+// fails (blocking it here doesn't work: with Moodle's response, H5P gets stuck in a loop). And it
+// doesn't query its Hub or send it usage statistics every day (its scheduled task does read these
+// settings).
 $CFG->forced_plugin_settings = [
     'mod_hvp' => ['hub_is_enabled' => 0, 'send_usage_statistics' => 0],
 ];

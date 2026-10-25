@@ -1,13 +1,13 @@
 <?php
 /**
- * Crea un curso vacío para que un agente de profesor lo construya entero (p. ej. el
- * comando /teacher-agent:build-course), con el profesor como editingteacher y los alumnos
- * sembrados (alumno y, si existen, los de seed-teacher-activity.php) matriculados.
+ * Creates an empty course for a teacher agent to build from scratch (e.g. the
+ * /teacher-agent:build-course command), with the teacher as editingteacher and the seeded
+ * students (alumno and, if they exist, those of seed-teacher-activity.php) enrolled.
  *
  *   docker compose exec webserver env COURSE_SHORTNAME=... COURSE_FULLNAME=... php seed-empty-course.php
  *
- * Si ya existe un curso con ese nombre corto, no lo toca: devuelve su id. Imprime una
- * sola línea JSON: {"id":..,"shortname":..,"fullname":..,"created":true|false}.
+ * If a course with that short name already exists, it leaves it alone and returns its id.
+ * Prints a single JSON line: {"id":..,"shortname":..,"fullname":..,"created":true|false}.
  */
 
 define('CLI_SCRIPT', true);
@@ -22,7 +22,7 @@ $CFG->noemailever = true;
 $shortname = trim((string) getenv('COURSE_SHORTNAME'));
 $fullname = trim((string) getenv('COURSE_FULLNAME')) ?: $shortname;
 if ($shortname === '') {
-    cli_error('Falta COURSE_SHORTNAME.');
+    cli_error('COURSE_SHORTNAME is missing.');
 }
 
 $existing = $DB->get_record('course', ['shortname' => $shortname]);

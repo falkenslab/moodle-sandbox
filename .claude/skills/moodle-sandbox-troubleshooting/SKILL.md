@@ -62,7 +62,7 @@ out while building `manage.mjs`. Read this before touching the sandbox again.
   answers without registration: a libraries-only package) and `seed/install-h5p.php` does what
   `core_h5p\core::fetch_content_type()` does after downloading: the file in
   `core_h5p/library_sources`, `helper::save_h5p($factory, $file, (object) [], false, true)`,
-  delete it. Types pulled in as dependencies of an earlier one then show as "ya está".
+  delete it. Types pulled in as dependencies of an earlier one then show as "already installed".
 - A plugin release made for an older Moodle (`supported` not covering 5.2) still installs: Moodle
   only refuses `requires` above the site's version or an `incompatible` one. Check it in a real
   browser, with its console open: on 5.2, `format_onetopic` (5.1) and `format_tiles` (5.1) throw

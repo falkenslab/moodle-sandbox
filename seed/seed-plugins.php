@@ -1,19 +1,18 @@
 <?php
 /**
- * Siembra contenido que usa los plugins de la imagen (docker/plugins.txt), para probar programas
- * contra ellos como en un campus real:
+ * Seeds content that uses the image's plugins (docker/plugins.txt), to test programs against them
+ * as on a real campus:
  *
- * - en el curso de pruebas, un cuestionario con una pregunta de cada tipo de pregunta instalado
- *   (CodeRunner, Formulas, Gapfill, Drag-and-drop matching): las de ejemplo de cada plugin (los
- *   ayudantes de sus tests);
- * - un curso por formato de curso instalado (Grid, Collapsed Topics, Onetopic, Tiles), con secciones
- *   con nombre y actividades, y el profesor y los alumnos sembrados matriculados.
+ * - in the test course, a quiz with one question of each installed question type (CodeRunner,
+ *   Formulas, Gapfill, Drag-and-drop matching): each plugin's sample ones (its test helpers);
+ * - a course per installed course format (Grid, Collapsed Topics, Onetopic, Tiles), with named
+ *   sections and activities, and the teacher and the seeded students enrolled.
  *
  *   docker compose exec webserver php seed-plugins.php
  *
- * Necesita el curso de pruebas (seed-course.php). Lee los usuarios del profesor y el alumno de
- * MOODLE_TEACHER_USERNAME y MOODLE_STUDENT_USERNAME. Lo que ya existe no se toca, y un plugin que
- * la imagen no tenga se salta, así que se puede ejecutar cuantas veces haga falta.
+ * Needs the test course (seed-course.php). Reads the teacher's and the student's usernames from
+ * MOODLE_TEACHER_USERNAME and MOODLE_STUDENT_USERNAME. What already exists is left alone, and a
+ * plugin the image doesn't have is skipped, so it can run as many times as needed.
  */
 
 define('CLI_SCRIPT', true);
@@ -21,11 +20,11 @@ require(__DIR__ . '/config.php');
 require_once($CFG->libdir . '/clilib.php');
 require_once($CFG->libdir . '/testing/generator/lib.php');
 require_once($CFG->dirroot . '/mod/quiz/locallib.php');
-// create_question() necesita las clases de PHPUnit (ver seed-course.php).
+// create_question() needs PHPUnit's classes (see seed-course.php).
 require_once(__DIR__ . '/vendor/autoload.php');
 
 $CFG->noemailever = true;
-// Como el administrador: algunos módulos crean eventos del calendario, y sin usuario no hay permiso.
+// As the admin: some modules create calendar events, and without a user there's no permission.
 \core\session\manager::set_user(get_admin());
 
 function env(string $name, string $default): string {
@@ -35,15 +34,15 @@ function env(string $name, string $default): string {
 
 $course = $DB->get_record('course', ['shortname' => 'sandbox-course']);
 if (!$course) {
-    cli_error('No existe el curso "sandbox-course": siémbralo antes (seed-course.php).');
+    cli_error('The course "sandbox-course" does not exist: seed it first (seed-course.php).');
 }
 $generator = new testing_data_generator();
 
-/** El cuestionario con una pregunta de cada tipo de pregunta de los plugins. */
+/** The quiz with one question of each of the plugins' question types. */
 function seed_questions(testing_data_generator $generator, stdClass $course): void {
     global $DB;
     $quizname = 'Cuestionario de plugins';
-    // Tipo de pregunta => la pregunta de ejemplo de su ayudante de tests.
+    // Question type => the sample question of its test helper.
     $questions = [
         'coderunner' => 'sqr',
         'formulas' => 'testsinglenum',
@@ -51,12 +50,12 @@ function seed_questions(testing_data_generator $generator, stdClass $course): vo
         'ddmatch' => 'foursubq',
     ];
     if ($DB->record_exists('quiz', ['course' => $course->id, 'name' => $quizname])) {
-        cli_writeln("El cuestionario \"$quizname\" ya existe.");
+        cli_writeln("The quiz \"$quizname\" already exists.");
         return;
     }
     $installed = array_filter(array_keys($questions), fn($qtype) => question_bank::is_qtype_installed($qtype));
     if (!$installed) {
-        cli_writeln('La imagen no tiene ninguno de los tipos de pregunta: no hay cuestionario de plugins.');
+        cli_writeln('The image has none of the question types: no plugins quiz.');
         return;
     }
 
@@ -65,11 +64,11 @@ function seed_questions(testing_data_generator $generator, stdClass $course): vo
         'course' => $course->id,
         'name' => $quizname,
         'intro' => 'Una pregunta de cada tipo de pregunta que no viene con Moodle, generado por seed-plugins.php.',
-        // Como en un examen de programación: cada pregunta se comprueba al momento (CodeRunner la
-        // corrige al pulsar "Comprobar").
+        // As in a programming exam: each question is checked right away (CodeRunner grades it on
+        // "Check").
         'preferredbehaviour' => 'adaptive',
     ]);
-    // Como en seed-course.php, una categoría del propio cuestionario.
+    // As in seed-course.php, a category of the quiz itself.
     $questiongenerator = $generator->get_plugin_generator('core_question');
     $category = $questiongenerator->create_question_category(['contextid' => context_module::instance($quiz->cmid)->id]);
     foreach ($installed as $qtype) {
@@ -77,16 +76,16 @@ function seed_questions(testing_data_generator $generator, stdClass $course): vo
         quiz_add_quiz_question($question->id, $quiz);
         cli_writeln("pregunta=$qtype:{$questions[$qtype]} id={$question->id}");
     }
-    // Sin esto, sumgrades se queda a 0 y Moodle no deja empezar ningún intento (ver seed-course.php).
+    // Without this, sumgrades stays at 0 and Moodle doesn't let any attempt start (see seed-course.php).
     \mod_quiz\quiz_settings::create($quiz->id)->get_grade_calculator()->recompute_quiz_sumgrades();
     $transaction->allow_commit();
     cli_writeln("quiz_cmid={$quiz->cmid}");
 }
 
-/** Un curso por formato de curso de los plugins, con el mismo contenido en todos. */
+/** A course per course format of the plugins, with the same content in all of them. */
 function seed_formats(testing_data_generator $generator): void {
     global $DB;
-    // Formato => su nombre, para el curso.
+    // Format => its name, for the course.
     $formats = [
         'grid' => 'Grid',
         'topcoll' => 'Collapsed Topics',
@@ -99,11 +98,11 @@ function seed_formats(testing_data_generator $generator): void {
     foreach ($formats as $format => $name) {
         $shortname = "formato-$format";
         if (!isset($installed[$format])) {
-            cli_writeln("La imagen no tiene el formato $format: sin curso.");
+            cli_writeln("The image doesn't have the $format format: no course.");
             continue;
         }
         if ($existing = $DB->get_record('course', ['shortname' => $shortname])) {
-            cli_writeln("El curso \"$shortname\" ya existe.");
+            cli_writeln("The course \"$shortname\" already exists.");
             enrol_seeded_users($generator, $existing);
             continue;
         }
@@ -115,7 +114,7 @@ function seed_formats(testing_data_generator $generator): void {
             'format' => $format,
             'numsections' => count($sections),
         ]);
-        // Secciones con nombre y, en cada una, apuntes, una tarea y, en la última, un foro.
+        // Named sections, each with notes and an assignment, and a forum in the general section.
         foreach ($sections as $i => $title) {
             $section = $i + 1;
             course_update_section($course, $DB->get_record('course_sections', ['course' => $course->id, 'section' => $section]),
@@ -135,14 +134,14 @@ function seed_formats(testing_data_generator $generator): void {
 }
 
 /**
- * Un curso con una actividad de cada módulo de los plugins (los que traen generador de datos) y
- * sus bloques en la página del curso. Cada actividad y cada bloque se crea si falta; devuelve los
- * que fallan.
+ * A course with one activity of each of the plugins' modules (those with a data generator) and
+ * their blocks on the course page. Each activity and each block is created if missing; returns
+ * the ones that fail.
  */
 function seed_activities(testing_data_generator $generator): array {
     global $DB;
-    // Módulo => nombre de la actividad. Sin generador (y sin actividad sembrada): evoting, hotpot,
-    // hvp (necesita un paquete H5P) y offlinequiz en 4.5.
+    // Module => the activity's name. Without a generator (and no seeded activity): evoting, hotpot,
+    // hvp (needs an H5P package) and offlinequiz in 4.5.
     $modules = [
         'attendance' => 'Asistencia',
         'board' => 'Tablero de ideas',
@@ -159,9 +158,9 @@ function seed_activities(testing_data_generator $generator): array {
         'survey' => 'Encuesta predefinida',
         'questionnaire' => 'Encuesta de satisfacción',
     ];
-    // Lo que el generador de un módulo no pone por su cuenta.
+    // What a module's generator doesn't set on its own.
     $extra = [
-        // Un documento de texto nuevo (de su plantilla), no uno subido.
+        // A new text document (from its template), not an uploaded one.
         'collabora' => ['format' => 'wordprocessor'],
     ];
     $blocks = ['completion_progress', 'xp', 'grade_me', 'quickmail', 'configurable_reports'];
@@ -184,7 +183,7 @@ function seed_activities(testing_data_generator $generator): array {
     foreach ($modules as $module => $name) {
         $hasgenerator = isset($installed[$module]) && file_exists($installed[$module] . '/tests/generator/lib.php');
         if (!$hasgenerator) {
-            cli_writeln("La imagen no tiene mod_$module (o no trae generador): sin actividad.");
+            cli_writeln("The image doesn't have mod_$module (or it has no generator): no activity.");
             continue;
         }
         $moduleid = $DB->get_field('modules', 'id', ['name' => $module]);
@@ -205,7 +204,7 @@ function seed_activities(testing_data_generator $generator): array {
     $installedblocks = core_component::get_plugin_list('block');
     foreach ($blocks as $block) {
         if (!isset($installedblocks[$block])) {
-            cli_writeln("La imagen no tiene block_$block: sin bloque.");
+            cli_writeln("The image doesn't have block_$block: no block.");
             continue;
         }
         if ($DB->record_exists('block_instances', ['blockname' => $block, 'parentcontextid' => $context->id])) {
@@ -223,8 +222,8 @@ function seed_activities(testing_data_generator $generator): array {
     return $failed;
 }
 
-/** Matricula en el curso al profesor y a los alumnos sembrados que existan y no lo estén ya: los de
- * `activity` pueden llegar después que el curso. */
+/** Enrols in the course the teacher and the seeded students that exist and aren't enrolled yet:
+ * those of `activity` may arrive after the course. */
 function enrol_seeded_users(testing_data_generator $generator, stdClass $course): void {
     global $DB;
     $context = context_course::instance($course->id);
@@ -239,8 +238,8 @@ function enrol_seeded_users(testing_data_generator $generator, stdClass $course)
     }
 }
 
-/** Una creación que falla deja abierta su transacción, y todo lo que viniera después iría dentro de
- * ella y se desharía al terminar el script: se deshace ya. */
+/** A creation that fails leaves its transaction open, and everything after it would go inside it
+ * and be rolled back when the script ends: roll it back now. */
 function rollback_failed_transaction(): void {
     global $DB;
     if ($DB->is_transaction_started()) {
@@ -253,6 +252,6 @@ seed_questions($generator, $course);
 seed_formats($generator);
 $failed = seed_activities($generator);
 if ($failed) {
-    cli_error("No se pudo sembrar:\n- " . implode("\n- ", $failed));
+    cli_error("Could not seed:\n- " . implode("\n- ", $failed));
 }
 cli_writeln('OK');

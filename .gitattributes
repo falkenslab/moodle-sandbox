@@ -1,5 +1,5 @@
-# Los ficheros de la imagen, con saltos de línea LF también en Windows: un Dockerfile con CRLF
-# rompe las líneas que continúan con \.
+# The image's files, with LF line endings on Windows too: a Dockerfile with CRLF
+# breaks the lines that continue with \.
 Dockerfile text eol=lf
 docker/** text eol=lf
 php/** text eol=lf

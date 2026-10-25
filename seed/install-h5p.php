@@ -1,14 +1,14 @@
 <?php
 /**
- * Instala en el sitio los tipos de contenido H5P de una carpeta de paquetes (.h5p de solo librerías,
- * como los da el Hub de H5P), sin que el sitio hable con h5p.org: lo mismo que hace
- * core_h5p\core::fetch_content_type() después de descargar uno, desde el fichero local. Lo ejecuta
- * manage.mjs (`npm run h5p`), que descarga los paquetes en el equipo y copia la carpeta al contenedor:
+ * Installs on the site the H5P content types of a folder of packages (libraries-only .h5p files,
+ * as the H5P Hub serves them), without the site talking to h5p.org: what
+ * core_h5p\core::fetch_content_type() does after downloading one, from the local file. manage.mjs
+ * runs it (`npm run h5p`), after downloading the packages on the host and copying the folder in:
  *
  *   docker compose exec webserver php install-h5p.php /tmp/h5p-content-types
  *
- * Un tipo que el sitio ya tiene en esa versión (o una más nueva) se salta, así que se puede ejecutar
- * cuantas veces haga falta.
+ * A type the site already has in that version (or a newer one) is skipped, so it can run as many
+ * times as needed.
  */
 
 define('CLI_SCRIPT', true);
@@ -20,10 +20,10 @@ use core_h5p\helper;
 
 $dir = $argv[1] ?? '';
 if (!is_dir($dir)) {
-    cli_error("Uso: php install-h5p.php <carpeta con los .h5p>");
+    cli_error("Usage: php install-h5p.php <folder with the .h5p files>");
 }
 
-// Como el administrador: instalar librerías H5P es cosa suya.
+// As the admin: installing H5P libraries is the admin's job.
 \core\session\manager::set_user(get_admin());
 $fs = get_file_storage();
 $systemcontext = context_system::instance();
@@ -31,7 +31,7 @@ $failed = 0;
 
 foreach (glob("$dir/*.h5p") as $path) {
     $machinename = basename($path, '.h5p');
-    // La versión que trae el paquete: la de su library.json (en la carpeta <machineName>-<x>.<y>).
+    // The package's version: the one in its library.json (in the <machineName>-<x>.<y> folder).
     $zip = new ZipArchive();
     $version = null;
     if ($zip->open($path) === true) {
@@ -44,7 +44,7 @@ foreach (glob("$dir/*.h5p") as $path) {
         $zip->close();
     }
     if (!$version) {
-        cli_writeln("$machinename: el paquete no trae su library.json; se salta.");
+        cli_writeln("$machinename: the package has no library.json; skipped.");
         $failed++;
         continue;
     }
@@ -55,11 +55,11 @@ foreach (glob("$dir/*.h5p") as $path) {
         [$machinename, $version->majorVersion, $version->majorVersion, $version->minorVersion, $version->minorVersion,
             $version->patchVersion]);
     if ($installed) {
-        cli_writeln("$label: ya está.");
+        cli_writeln("$label: already installed.");
         continue;
     }
 
-    // Como fetch_content_type(): el paquete en library_sources, save_h5p() solo con las librerías, y fuera.
+    // Like fetch_content_type(): the package in library_sources, save_h5p() with only the libraries, then deleted.
     $filerecord = ['contextid' => $systemcontext->id, 'component' => 'core_h5p', 'filearea' => 'library_sources',
         'itemid' => 0, 'filepath' => '/', 'filename' => $machinename];
     if ($existing = $fs->get_file(...array_values($filerecord))) {
@@ -72,11 +72,11 @@ foreach (glob("$dir/*.h5p") as $path) {
 
     $runnable = $DB->record_exists('h5p_libraries', ['machinename' => $machinename, 'runnable' => 1,
         'majorversion' => $version->majorVersion, 'minorversion' => $version->minorVersion]);
-    cli_writeln($runnable ? "$label: instalado." : "$label: no se pudo instalar.");
+    cli_writeln($runnable ? "$label: installed." : "$label: could not be installed.");
     $failed += $runnable ? 0 : 1;
 }
 
 if ($failed) {
-    cli_error("$failed tipos de contenido no se instalaron.");
+    cli_error("$failed content types were not installed.");
 }
 cli_writeln('OK');

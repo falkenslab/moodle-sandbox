@@ -1,12 +1,11 @@
 #!/usr/bin/env node
 /**
- * Gestiona el sandbox de Moodle dockerizado (construir la imagen con el código de
- * Moodle, levantar los contenedores, instalar el sitio y sembrar un curso de demo)
- * sin depender de bash — se invoca con Node directamente, así que en Windows evita
- * el problema de Git Bash reescribiendo argumentos que parecen rutas absolutas de
- * Unix (`/var/www/html`, etc.) al pasarlos a `docker compose exec`.
+ * Manages the dockerized Moodle sandbox (building the image with Moodle's code, starting the
+ * containers, installing the site and seeding a demo course) without bash: it runs straight
+ * from Node, so on Windows it avoids Git Bash rewriting arguments that look like absolute Unix
+ * paths (`/var/www/html`, etc.) when passing them to `docker compose exec`.
  *
- * Uso: node manage.mjs <env|build|up|install|seed|setup|down|reset|status|info|tasks|course|activity|theme|plugins|content|h5p>
+ * Usage: node manage.mjs <env|build|up|install|seed|setup|down|reset|status|info|tasks|course|activity|theme|plugins|content|h5p>
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, rmSync, writeFileSync, readFileSync, chmodSync, mkdirSync } from "node:fs";
@@ -14,24 +13,24 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 
-// Todo es relativo a la carpeta de este script (la raíz del repo).
+// Everything is relative to this script's folder (the repo root).
 const moodleDir = path.dirname(fileURLToPath(import.meta.url));
-// El checkout de Moodle de antes de la imagen (ver Dockerfile): ya no se usa; `reset` lo borra.
+// The Moodle checkout from before the image (see Dockerfile): no longer used; `reset` deletes it.
 const srcDir = path.join(moodleDir, "src");
 
 /**
- * Los sitios que pueden convivir, uno por serie de Moodle: cada uno con su proyecto de Docker
- * Compose (sus contenedores y volúmenes), su puerto y su .env. El 5.2 es el de siempre y el que
- * usan los agentes por defecto; `--moodle 4.5` en cualquier orden elige el otro.
+ * The sites that can run side by side, one per Moodle series: each with its own Docker Compose
+ * project (its containers and volumes), its port and its .env. 5.2 is the usual one and the one
+ * the agents use by default; `--moodle 4.5`, in any position, picks the other.
  */
 const SITES = {
   "5.2": { project: "moodle-sandbox", version: "5.2.4", port: "8080", name: "Moodle Sandbox" },
   "4.5": { project: "moodle-sandbox-45", version: "4.5.15", port: "8081", name: "Moodle Sandbox 4.5" },
 };
 
-/** Saca `--moodle <serie>` (o `--moodle=<serie>`) de los argumentos y devuelve el sitio. Sin él,
- * MOODLE_SANDBOX_PROJECT (del entorno) elige el sitio por su proyecto; si no es de ninguno, es un
- * sitio más con los valores del 5.2 y su propio .env. */
+/** Takes `--moodle <series>` (or `--moodle=<series>`) out of the arguments and returns the site.
+ * Without it, MOODLE_SANDBOX_PROJECT (from the environment) picks the site by its project; if it
+ * matches none, it's one more site with 5.2's values and its own .env. */
 function selectSite(args) {
   let series;
   for (let i = 0; i < args.length; i++) {
@@ -42,14 +41,14 @@ function selectSite(args) {
     break;
   }
   if (series !== undefined && !SITES[series]) {
-    throw new Error(`No hay sitio para Moodle "${series}": ${Object.keys(SITES).join(", ")}.`);
+    throw new Error(`No site for Moodle "${series}": ${Object.keys(SITES).join(", ")}.`);
   }
   const project = process.env.MOODLE_SANDBOX_PROJECT || SITES[series ?? "5.2"].project;
   const preset = SITES[series] ?? Object.values(SITES).find((s) => s.project === project) ?? SITES["5.2"];
   return {
     ...preset,
     project,
-    // El de siempre conserva .env; los demás, .env.<proyecto>.
+    // The usual one keeps .env; the others, .env.<project>.
     envPath: path.join(moodleDir, project === SITES["5.2"].project ? ".env" : `.env.${project}`),
   };
 }
@@ -63,7 +62,7 @@ const pluginsScript = path.join(moodleDir, "seed", "seed-plugins.php");
 const contentScript = path.join(moodleDir, "seed", "seed-content.php");
 const h5pScript = path.join(moodleDir, "seed", "install-h5p.php");
 const h5pList = path.join(moodleDir, "docker", "h5p-content-types.txt");
-// Los paquetes de tipos de contenido H5P descargados en el equipo (fuera de git): ver h5p().
+// The H5P content type packages downloaded on this machine (outside git): see h5p().
 const h5pCache = path.join(moodleDir, "seed", "h5p");
 const configureScript = path.join(moodleDir, "seed", "configure-plugins.php");
 
@@ -75,7 +74,7 @@ function run(cmd, args, opts = {}) {
   const result = spawnSync(cmd, args, { stdio: "inherit", cwd: moodleDir, ...opts });
   if (result.error) throw result.error;
   if (result.status !== 0) {
-    throw new Error(`"${cmd} ${args.join(" ")}" salió con código ${result.status}`);
+    throw new Error(`"${cmd} ${args.join(" ")}" exited with code ${result.status}`);
   }
 }
 
@@ -83,8 +82,8 @@ function runCapture(cmd, args, opts = {}) {
   return spawnSync(cmd, args, { cwd: moodleDir, encoding: "utf-8", ...opts });
 }
 
-/** `docker compose` del sitio elegido: su proyecto y su .env (con lo demás, MOODLE_VERSION y
- * MOODLE_SANDBOX_PORT, en el entorno: ver el final del fichero). */
+/** `docker compose` for the chosen site: its project and its .env (with the rest, MOODLE_VERSION
+ * and MOODLE_SANDBOX_PORT, in the environment: see the end of the file). */
 function composeBase() {
   return ["compose", "-p", site.project, ...(existsSync(envPath) ? ["--env-file", envPath] : [])];
 }
@@ -93,13 +92,13 @@ function compose(args) {
   run("docker", [...composeBase(), ...args]);
 }
 
-/** `docker compose exec webserver <args>` — rutas siempre relativas a /var/www/html. */
+/** `docker compose exec webserver <args>` — paths always relative to /var/www/html. */
 function composeExec(args) {
   run("docker", [...composeBase(), "exec", "webserver", ...args]);
 }
 
-/** Copia un fichero del repo al código de Moodle del webserver, con ese nombre: las
- * siembras se cargan como `__DIR__ . '/config.php'`, así que van junto a config.php. */
+/** Copies a file from the repo into the webserver's Moodle code, under that name: the seeds
+ * load `__DIR__ . '/config.php'`, so they go next to config.php. */
 function putCode(file, name) {
   run("docker", [...composeBase(), "cp", file, `webserver:/var/www/html/${name}`]);
 }
@@ -119,21 +118,21 @@ function readEnvFile() {
   return vars;
 }
 
-/** Puerto del host: MOODLE_SANDBOX_PORT del entorno o del .env del sitio (docker compose
- * también lo lee de ahí); si no, el del sitio (8080 el 5.2, 8081 el 4.5). */
+/** Host port: MOODLE_SANDBOX_PORT from the environment or from the site's .env (docker compose
+ * reads it from there too); otherwise the site's (8080 for 5.2, 8081 for 4.5). */
 function sandboxPort() {
   return process.env.MOODLE_SANDBOX_PORT || readEnvFile().MOODLE_SANDBOX_PORT || site.port;
 }
 
-/** URL del sitio: MOODLE_SANDBOX_URL si se da, si no localhost con el puerto del sandbox. */
+/** The site's URL: MOODLE_SANDBOX_URL if given, otherwise localhost with the sandbox's port. */
 function wwwroot() {
   return process.env.MOODLE_SANDBOX_URL || `http://localhost:${sandboxPort()}`;
 }
 
-/** Crea .env con contraseñas aleatorias si no existe todavía. Nunca lo sobrescribe. */
+/** Creates .env with random passwords if it doesn't exist yet. Never overwrites it. */
 function ensureEnv() {
   if (existsSync(envPath)) {
-    log(`${path.basename(envPath)} ya existe, no se toca.`);
+    log(`${path.basename(envPath)} already exists, left as is.`);
     return;
   }
   const content = `MOODLE_SANDBOX_PORT=${sandboxPort()}
@@ -155,58 +154,58 @@ MOODLE_STUDENT_EMAIL=alumno@example.com
   try {
     chmodSync(envPath, 0o600);
   } catch {
-    // best-effort, no-op en Windows
+    // best-effort, no-op on Windows
   }
-  log(`${path.basename(envPath)} generado con credenciales nuevas en ${envPath}`);
+  log(`${path.basename(envPath)} generated with new credentials at ${envPath}`);
 }
 
 /**
- * Construye aquí la imagen del sandbox (ver Dockerfile): Moodle MOODLE_VERSION (5.2.4 por
- * defecto) con sus dependencias de Composer dentro. Normalmente no hace falta: `up` descarga
- * la imagen publicada y solo la construye si no la encuentra. Sirve para probar otra versión
- * de Moodle o un cambio del Dockerfile; luego `up` recrea los contenedores con ella. Los
- * datos (base de datos, moodledata) no se tocan.
+ * Builds the sandbox's image here (see Dockerfile): Moodle MOODLE_VERSION (5.2.4 by default)
+ * with its Composer dependencies inside. Usually not needed: `up` pulls the published image
+ * and only builds it when it can't find it. Useful to try another Moodle version or a change
+ * to the Dockerfile; `up` then recreates the containers with it. The data (database,
+ * moodledata) is left alone.
  */
 function build() {
-  log("Construyendo la imagen de Moodle (clona Moodle e instala sus dependencias: unos minutos)...");
+  log("Building the Moodle image (clones Moodle and installs its dependencies: a few minutes)...");
   compose(["build", "--pull", "webserver"]);
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Levanta los contenedores (construyendo la imagen si falta). Con el sitio ya instalado,
- * lo actualiza al código de la imagen, que puede ser más nuevo tras un `build`. */
+/** Starts the containers (building the image if missing). With the site already installed,
+ * upgrades it to the image's code, which may be newer after a `build`. */
 async function up() {
   pullImage();
-  log("Levantando contenedores (docker compose up -d)...");
+  log("Starting containers (docker compose up -d)...");
   compose(["up", "-d"]);
-  log("Esperando a que la base de datos esté healthy...");
+  log("Waiting for the database to be healthy...");
   const healthy = await waitHealthy("db");
-  log(healthy ? "Base de datos lista." : "Aviso: la base de datos no confirmó estar healthy en 60s, se continúa igualmente.");
-  // Jobe tarda unos segundos en atender, y CodeRunner da por caído el servidor hasta entonces.
-  log(await waitHealthy("jobe") ? "Jobe listo." : "Aviso: Jobe no confirmó estar healthy en 60s; CodeRunner no corregirá hasta que lo esté.");
+  log(healthy ? "Database ready." : "Warning: the database didn't report healthy within 60s; carrying on anyway.");
+  // Jobe takes a few seconds to answer, and CodeRunner treats the server as down until then.
+  log(await waitHealthy("jobe") ? "Jobe ready." : "Warning: Jobe didn't report healthy within 60s; CodeRunner won't grade until it does.");
   if (healthy && dbHasTables()) installSite();
 }
 
 /**
- * Descarga la versión más nueva de la imagen del sitio, si es una publicada: una misma etiqueta
- * (5.2.4) recibe cada cambio del sandbox sobre ese Moodle, y compose solo la descarga si falta. No
- * pisa una construida en el equipo (etiqueta org.falkenslab.sandbox.build=local, ver Dockerfile).
- * Sin conexión, o con una versión sin publicar, sigue con la que haya (o `up` la construye).
+ * Pulls the newest version of the site's image, if it's a published one: the same tag (5.2.4)
+ * gets every sandbox change on that Moodle, and compose only pulls it when missing. It doesn't
+ * replace one built on this machine (label org.falkenslab.sandbox.build=local, see Dockerfile).
+ * Offline, or with an unpublished version, it carries on with whatever is there (or `up` builds it).
  */
 function pullImage() {
   const image = `ghcr.io/falkenslab/moodle-sandbox:${site.version}`;
   const build = runCapture("docker", ["image", "inspect", "--format", '{{index .Config.Labels "org.falkenslab.sandbox.build"}}', image]);
   if (build.status === 0 && build.stdout.trim() === "local") {
-    log(`La imagen ${image} está construida en este equipo: no se descarga otra.`);
+    log(`The image ${image} was built on this machine: not pulling another.`);
     return;
   }
-  log(`Buscando la versión más nueva de ${image}...`);
+  log(`Looking for the newest version of ${image}...`);
   const pull = runCapture("docker", ["pull", "--quiet", image]);
-  if (pull.status !== 0) log(`Aviso: no se pudo descargar ${image}; se sigue con la que haya.`);
+  if (pull.status !== 0) log(`Warning: couldn't pull ${image}; carrying on with whatever is there.`);
 }
 
-/** Espera hasta 60 s a que un servicio con healthcheck esté healthy. */
+/** Waits up to 60 s for a service with a healthcheck to be healthy. */
 async function waitHealthy(service) {
   const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
@@ -224,19 +223,19 @@ function dbHasTables() {
   return result.stdout?.trim() === "1";
 }
 
-/** Instala el esquema de Moodle en la base de datos si está vacía, o lo actualiza al código
- * de la imagen si ya está instalado: una imagen recién construida trae lo último de su rama,
- * y hasta actualizar Moodle suspende el cron y muestra su aviso de actualización. config.php
- * ya viene en la imagen y lee la contraseña y la URL del entorno (docker/config.php). */
+/** Installs Moodle's schema in the database if it's empty, or upgrades it to the image's code
+ * if it's already installed: a freshly built image brings the latest of its branch, and until
+ * Moodle is upgraded it suspends cron and shows its upgrade notice. config.php already comes
+ * in the image and reads the password and the URL from the environment (docker/config.php). */
 function installSite() {
   if (dbHasTables()) {
-    log("El sitio ya está instalado: se actualiza al código de la imagen si hace falta (admin/cli/upgrade.php)...");
+    log("The site is already installed: upgrading it to the image's code if needed (admin/cli/upgrade.php)...");
     composeExec(["php", "admin/cli/upgrade.php", "--non-interactive"]);
     configurePlugins();
     return;
   }
   const vars = readEnvFile();
-  log("Instalando el sitio (admin/cli/install_database.php)...");
+  log("Installing the site (admin/cli/install_database.php)...");
   composeExec([
     "php", "admin/cli/install_database.php",
     "--agree-license",
@@ -245,30 +244,30 @@ function installSite() {
     `--adminpass=${vars.MOODLE_ADMIN_PASSWORD ?? ""}`,
     `--adminemail=${vars.MOODLE_ADMIN_EMAIL ?? "admin@example.com"}`,
   ]);
-  log("Sitio instalado.");
+  log("Site installed.");
   configurePlugins();
 }
 
-/** Deja el sitio listo para los plugins de la imagen (seed/configure-plugins.php): CodeRunner
- * apuntando a Jobe, Chat y Encuesta
- * activados y los ajustes de plugins sin valor por defecto guardados. Solo cambia lo que falte. */
+/** Gets the site ready for the image's plugins (seed/configure-plugins.php): CodeRunner
+ * pointing at Jobe, Chat and Survey
+ * enabled, and plugin settings without a default saved. Only changes what's missing. */
 function configurePlugins() {
   putCode(configureScript, "configure-plugins.php");
   composeExec(["php", "configure-plugins.php"]);
-  // El tema de MOODLE_SANDBOX_THEME (entorno o .env), si se da: como un campus con Classic.
+  // The theme from MOODLE_SANDBOX_THEME (environment or .env), if given: like a campus on Classic.
   const wanted = process.env.MOODLE_SANDBOX_THEME || readEnvFile().MOODLE_SANDBOX_THEME;
   if (wanted && siteConfig("theme") !== wanted) theme([wanted]);
 }
 
-/** Copia seed/seed-course.php (versionado en el repo) al código de Moodle del contenedor
- * — que se pierde al recrearlo — y lo ejecuta dentro. */
+/** Copies seed/seed-course.php (versioned in the repo) into the container's Moodle code
+ * — which is lost when the container is recreated — and runs it there. */
 function seed() {
   if (!existsSync(seedScript)) {
-    throw new Error(`No se encuentra ${seedScript}`);
+    throw new Error(`Can't find ${seedScript}`);
   }
   putCode(seedScript, "seed-course.php");
   const vars = readEnvFile();
-  log("Sembrando curso de demo (profesor, alumno, quiz, tarea, foro)...");
+  log("Seeding the demo course (teacher, student, quiz, assignment, forum)...");
   composeExec([
     "env",
     `MOODLE_TEACHER_USERNAME=${vars.MOODLE_TEACHER_USERNAME ?? "profesor"}`,
@@ -283,19 +282,17 @@ function seed() {
 }
 
 /**
- * Ejecuta ya las tareas ad hoc pendientes de Moodle, sin esperar al contenedor de cron (que
- * pasa cada minuto). Las siembras la llaman al terminar: en Moodle 5 algunas son
- * imprescindibles, y sin transfer_question_categories/transfer_questions el banco de
- * preguntas del curso queda bloqueado ("Create a new question" no aparece).
+ * Runs Moodle's pending ad hoc tasks now, without waiting for the cron container (which runs
+ * every minute). The seeds call it when they finish: in Moodle 5 some are essential, and
+ * without transfer_question_categories/transfer_questions the course's question bank stays
+ * locked ("Create a new question" doesn't show up).
  */
 function runAdhocTasks() {
-  log("Ejecutando las tareas pendientes de Moodle...");
+  log("Running Moodle's pending tasks...");
   composeExec(["php", "admin/cli/adhoc_task.php", "--execute"]);
 }
 
-/** Siembra, sobre el curso de pruebas, trabajo para un agente de profesor: contenido
- * coherente, tres alumnos más con entregas de calidad distinta y dudas en el foro. */
-/** Añade a .env una variable que falte (sin tocar las demás): .env nunca se reescribe. */
+/** Adds a missing variable to .env (leaving the others alone): .env is never rewritten. */
 function ensureEnvKey(name, value) {
   if (readEnvFile()[name] !== undefined) return;
   const raw = existsSync(envPath) ? readFileSync(envPath, "utf-8") : "";
@@ -303,13 +300,13 @@ function ensureEnvKey(name, value) {
   writeFileSync(envPath, `${raw}${separator}${name}=${value}\n`, "utf-8");
 }
 
-/** Siembra contenido que usa los plugins de la imagen: en el curso de pruebas, un cuestionario con
- * una pregunta de cada tipo de pregunta instalado; y un curso por formato de curso instalado, con
- * el profesor y los alumnos matriculados. Lo que ya existe no se toca. */
+/** Seeds content that uses the image's plugins: in the demo course, a quiz with one question of
+ * each installed question type; and a course per installed course format, with the teacher and
+ * the students enrolled. What already exists is left alone. */
 function plugins() {
   putCode(pluginsScript, "seed-plugins.php");
   const vars = readEnvFile();
-  log("Sembrando contenido de los plugins (cuestionario de tipos de pregunta, un curso por formato)...");
+  log("Seeding the plugins' content (question types quiz, a course per format)...");
   composeExec([
     "env",
     `MOODLE_TEACHER_USERNAME=${vars.MOODLE_TEACHER_USERNAME ?? "profesor"}`,
@@ -319,16 +316,17 @@ function plugins() {
 }
 
 /**
- * Crea el curso de contenido que lee la batería de pruebas de moodle-driver ("mcp-content",
- * seed/seed-content.php): una actividad de cada tipo, con entregas, intentos, respuestas, debates,
- * notas y visitas. Crea a los alumnos sembrados si faltan. No hace nada si el curso ya existe.
+ * Creates the content course moodle-driver's test suite reads ("mcp-content",
+ * seed/seed-content.php): one activity of each type, with submissions, attempts, responses,
+ * discussions, grades and views. Creates the seeded students if missing. Does nothing if the
+ * course already exists.
  */
 function content() {
   putCode(contentScript, "seed-content.php");
-  // La contraseña conocida de los alumnos sembrados, como en `activity`.
+  // The seeded students' known password, as in `activity`.
   ensureEnvKey("MOODLE_SEEDED_STUDENTS_PASSWORD", randomPassword());
   const vars = readEnvFile();
-  log("Sembrando el curso de contenido de moodle-driver (mcp-content)...");
+  log("Seeding moodle-driver's content course (mcp-content)...");
   composeExec([
     "env",
     `MOODLE_TEACHER_USERNAME=${vars.MOODLE_TEACHER_USERNAME ?? "profesor"}`,
@@ -339,10 +337,10 @@ function content() {
 }
 
 /**
- * Instala los tipos de contenido H5P de docker/h5p-content-types.txt sin que el sitio hable con
- * h5p.org (docker-compose.yml lo apunta a 127.0.0.1): los descarga aquí, en el equipo, a la caché
- * seed/h5p/ si faltan, los copia al contenedor y seed/install-h5p.php los instala. Sin conexión,
- * instala los que ya estén en la caché. Para actualizar uno, se borra su fichero de la caché.
+ * Installs the H5P content types in docker/h5p-content-types.txt without the site talking to
+ * h5p.org (docker-compose.yml points it at 127.0.0.1): downloads them here, on this machine,
+ * into the seed/h5p/ cache if missing, copies them into the container and seed/install-h5p.php
+ * installs them. Offline, it installs those already cached. To update one, delete its cached file.
  */
 async function h5p() {
   const types = readFileSync(h5pList, "utf-8").split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith("#"));
@@ -350,48 +348,50 @@ async function h5p() {
   for (const type of types) {
     const file = path.join(h5pCache, `${type}.h5p`);
     if (existsSync(file)) continue;
-    log(`Descargando el tipo de contenido H5P ${type} (hub-api.h5p.org, desde este equipo)...`);
+    log(`Downloading the H5P content type ${type} (hub-api.h5p.org, from this machine)...`);
     try {
       const response = await fetch(`https://hub-api.h5p.org/v1/content-types/${type}`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       writeFileSync(file, Buffer.from(await response.arrayBuffer()));
     } catch (error) {
-      log(`Aviso: no se pudo descargar ${type} (${error.message}); se instalan los que haya en la caché.`);
+      log(`Warning: couldn't download ${type} (${error.message}); installing whatever is cached.`);
     }
   }
   putCode(h5pScript, "install-h5p.php");
   composeExec(["rm", "-rf", "/tmp/h5p-content-types"]);
   run("docker", [...composeBase(), "cp", h5pCache, "webserver:/tmp/h5p-content-types"]);
-  log("Instalando los tipos de contenido H5P...");
+  log("Installing the H5P content types...");
   composeExec(["php", "install-h5p.php", "/tmp/h5p-content-types"]);
   composeExec(["rm", "-rf", "/tmp/h5p-content-types"]);
 }
 
+/** Seeds, on top of the demo course, work for a teacher agent: coherent content, three more
+ * students with submissions of varying quality, and doubts in the forum. */
 function activity() {
   if (!existsSync(activityScript)) {
-    throw new Error(`No se encuentra ${activityScript}`);
+    throw new Error(`Can't find ${activityScript}`);
   }
   putCode(activityScript, "seed-teacher-activity.php");
-  log("Sembrando actividad para el profesor (alumnos, entregas y dudas en el foro)...");
-  // Una contraseña conocida para los alumnos sembrados, para poder entrar como ellos.
+  log("Seeding the teacher's workload (students, submissions and forum doubts)...");
+  // A known password for the seeded students, so you can log in as them.
   ensureEnvKey("MOODLE_SEEDED_STUDENTS_PASSWORD", randomPassword());
   composeExec(["env", `MOODLE_SEEDED_STUDENTS_PASSWORD=${readEnvFile().MOODLE_SEEDED_STUDENTS_PASSWORD}`,
     "php", "seed-teacher-activity.php"]);
-  // Los cursos de los plugins se siembran antes que estos alumnos: así quedan matriculados también.
+  // The plugins' courses are seeded after these students: that way they get enrolled too.
   plugins();
   runAdhocTasks();
 }
 
 /**
- * Crea un curso vacío (o devuelve el que ya tiene ese nombre corto) para que un agente de
- * profesor lo construya entero, con el profesor y los alumnos sembrados matriculados.
- * `course <nombre-corto> ["Nombre completo"] [--json]`; con --json imprime solo
+ * Creates an empty course (or returns the one that already has that short name) for a teacher
+ * agent to build from scratch, with the seeded teacher and students enrolled.
+ * `course <short-name> ["Full name"] [--json]`; with --json it prints only
  * {id, shortname, fullname, url, created}.
  */
 function course(args) {
   const json = args.includes("--json");
   const [shortname, fullname] = args.filter((a) => a !== "--json");
-  if (!shortname) throw new Error('Uso: npm run course -- <nombre-corto> ["Nombre completo"] [--json]');
+  if (!shortname) throw new Error('Usage: npm run course -- <short-name> ["Full name"] [--json]');
   putCode(emptyCourseScript, "seed-empty-course.php");
   const vars = readEnvFile();
   const result = runCapture("docker", [
@@ -401,41 +401,41 @@ function course(args) {
     `MOODLE_STUDENT_USERNAME=${vars.MOODLE_STUDENT_USERNAME ?? "alumno"}`,
     "php", "seed-empty-course.php",
   ]);
-  if (result.status !== 0) throw new Error(`No se pudo crear el curso: ${(result.stderr || result.stdout).trim()}`);
+  if (result.status !== 0) throw new Error(`Couldn't create the course: ${(result.stderr || result.stdout).trim()}`);
   const created = JSON.parse(result.stdout.trim().split(/\r?\n/).at(-1));
   const data = { ...created, url: `${installedWwwroot()}/course/view.php?id=${created.id}` };
   if (json) {
     process.stdout.write(`${JSON.stringify(data, null, 2)}\n`);
     return;
   }
-  log(`${data.created ? "Curso creado" : "El curso ya existía"}: ${data.fullname} (id ${data.id}) → ${data.url}`);
+  log(`${data.created ? "Course created" : "The course already existed"}: ${data.fullname} (id ${data.id}) → ${data.url}`);
 }
 
 function down() {
   compose(["down"]);
 }
 
-/** Destructivo: borra contenedores + volúmenes (la base de datos y moodledata) + .env
- * (y src/, el checkout de antes de la imagen, si queda). La imagen se conserva: la
- * reconstruye `build`. Requiere --yes explícito para no borrar nada por accidente. */
+/** Destructive: deletes containers + volumes (the database and moodledata) + .env
+ * (and src/, the checkout from before the image, if still there). The image is kept:
+ * `build` rebuilds it. Requires an explicit --yes so nothing is deleted by accident. */
 function reset(args) {
   if (!args.includes("--yes")) {
-    throw new Error(`Esto borra los contenedores, los volúmenes (el sitio ${site.project} entero) y ${path.basename(envPath)}. Repite con --yes si es lo que quieres.`);
+    throw new Error(`This deletes the containers, the volumes (the whole ${site.project} site) and ${path.basename(envPath)}. Run it again with --yes if that's what you want.`);
   }
-  log(`Borrando contenedores y volúmenes de ${site.project}...`);
+  log(`Deleting the containers and volumes of ${site.project}...`);
   compose(["down", "-v"]);
-  log(`Borrando ${path.basename(envPath)} (y src/, si queda)...`);
+  log(`Deleting ${path.basename(envPath)} (and src/, if still there)...`);
   rmSync(srcDir, { recursive: true, force: true });
   rmSync(envPath, { force: true });
-  log("Listo. 'npm run setup' (con el mismo --moodle) para volver a montar el sandbox desde cero.");
+  log("Done. 'npm run setup' (with the same --moodle) to rebuild the sandbox from scratch.");
 }
 
 function status() {
   compose(["ps"]);
 }
 
-/** La URL del sitio: la que el contenedor da a config.php (MOODLE_WWWROOT, que
- * docker-compose.yml deriva igual que wwwroot()). */
+/** The site's URL: the one the container gives config.php (MOODLE_WWWROOT, which
+ * docker-compose.yml derives the same way as wwwroot()). */
 function installedWwwroot() {
   return wwwroot();
 }
@@ -454,7 +454,7 @@ function courseId(shortname = "sandbox-course") {
   return Number.isInteger(id) && id > 0 ? id : undefined;
 }
 
-/** Un ajuste del sitio (mdl_config), leído de la base de datos sin arrancar Moodle. */
+/** A site setting (mdl_config), read from the database without starting Moodle. */
 function siteConfig(name) {
   const result = runCapture("docker", [
     ...composeBase(), "exec", "-T", "db", "psql", "-U", "moodle", "-d", "moodle",
@@ -463,8 +463,8 @@ function siteConfig(name) {
   return result.stdout?.trim() || undefined;
 }
 
-/** Los plugins de docker/plugins.txt que el sitio tiene instalados, con su versión:
- * { "qtype_coderunner": "2026051000", ... }. Uno que la serie de Moodle del sitio no tiene, no está. */
+/** The plugins of docker/plugins.txt the site has installed, with their versions:
+ * { "qtype_coderunner": "2026051000", ... }. One the site's Moodle series doesn't have is left out. */
 function installedPlugins() {
   const components = [...new Set(readFileSync(path.join(moodleDir, "docker", "plugins.txt"), "utf-8")
     .split(/\r?\n/).filter((line) => line.trim() && !line.startsWith("#")).map((line) => line.trim().split(/\s+/)[1]))];
@@ -475,32 +475,32 @@ function installedPlugins() {
   return Object.fromEntries((result.stdout ?? "").trim().split(/\r?\n/).filter(Boolean).map((line) => line.split(" ")));
 }
 
-/** Cambia el tema del sitio (boost, classic, que usan algunos campus, o adaptable, de los plugins de
- * la imagen) y vacía las cachés. La primera página después tarda: compila el CSS del tema. */
+/** Changes the site's theme (boost, classic, which some campuses use, or adaptable, from the
+ * image's plugins) and purges the caches. The first page afterwards is slow: it compiles the theme's CSS. */
 function theme(args) {
   const [name] = args;
-  if (!["boost", "classic", "adaptable"].includes(name)) throw new Error("Uso: npm run theme -- boost|classic|adaptable [--moodle 4.5]");
+  if (!["boost", "classic", "adaptable"].includes(name)) throw new Error("Usage: npm run theme -- boost|classic|adaptable [--moodle 4.5]");
   composeExec(["php", "admin/cli/cfg.php", "--name=theme", `--set=${name}`]);
   composeExec(["php", "admin/cli/purge_caches.php"]);
-  log(`Tema del sitio: ${name}.`);
+  log(`Site theme: ${name}.`);
 }
 
 /**
- * El contrato para los agentes que usan el sandbox: URL, curso sembrado y credenciales,
- * sin que tengan que leer .env ni consultar la base de datos. `--json` imprime solo el
- * JSON en stdout; sin él, lo mismo legible. Sale con código 1 si el sandbox no está
- * instalado, no está en marcha o el curso no está sembrado.
+ * The contract for the agents that use the sandbox: URL, seeded course and credentials,
+ * without them having to read .env or query the database. `--json` prints only the JSON
+ * to stdout; without it, the same in readable form. Exits with code 1 if the sandbox isn't
+ * installed, isn't running or the course isn't seeded.
  */
 function info(args) {
   const json = args.includes("--json");
   const fail = (message) => {
     throw new Error(`${message} (npm run setup / npm run up)`);
   };
-  if (!existsSync(envPath)) fail("El sandbox no está instalado.");
-  if (!isRunning()) fail("El sandbox no está en marcha.");
-  if (!dbHasTables()) fail("El sandbox no está instalado.");
+  if (!existsSync(envPath)) fail("The sandbox isn't installed.");
+  if (!isRunning()) fail("The sandbox isn't running.");
+  if (!dbHasTables()) fail("The sandbox isn't installed.");
   const id = courseId();
-  if (!id) fail('No se encuentra el curso "sandbox-course": falta sembrarlo.');
+  if (!id) fail('Can\'t find the course "sandbox-course": it needs seeding.');
 
   const vars = readEnvFile();
   const data = {
@@ -528,12 +528,12 @@ function info(args) {
     return;
   }
   console.log(`URL:      ${data.url}`);
-  console.log(`Moodle:   ${data.moodle.release} · tema ${data.moodle.theme} (proyecto ${data.project})`);
-  console.log(`Curso:    ${data.course.shortname} (id ${data.course.id}) → ${data.url}/course/view.php?id=${data.course.id}`);
+  console.log(`Moodle:   ${data.moodle.release} · theme ${data.moodle.theme} (project ${data.project})`);
+  console.log(`Course:   ${data.course.shortname} (id ${data.course.id}) → ${data.url}/course/view.php?id=${data.course.id}`);
   console.log(`Admin:    ${data.admin.username} / ${data.admin.password}`);
-  console.log(`Profesor: ${data.teacher.username} / ${data.teacher.password}`);
-  console.log(`Alumno:   ${data.student.username} / ${data.student.password}`);
-  for (const s of data.students) console.log(`Alumno:   ${s.username} / ${s.password}`);
+  console.log(`Teacher:  ${data.teacher.username} / ${data.teacher.password}`);
+  console.log(`Student:  ${data.student.username} / ${data.student.password}`);
+  for (const s of data.students) console.log(`Student:  ${s.username} / ${s.password}`);
 }
 
 async function setup() {
@@ -541,33 +541,33 @@ async function setup() {
   await up();
   installSite();
   seed();
-  // Antes que los plugins: su primera actividad es el módulo 5 de un sitio nuevo (ver seed-content.php).
+  // Before the plugins: its first activity is module 5 of a new site (see seed-content.php).
   content();
   plugins();
   await h5p();
   const vars = readEnvFile();
-  log("Sandbox listo:");
+  log("Sandbox ready:");
   log(`  URL: ${wwwroot()}`);
   log(`  Admin:    ${vars.MOODLE_ADMIN_USERNAME} / ${vars.MOODLE_ADMIN_PASSWORD}`);
-  log(`  Profesor: ${vars.MOODLE_TEACHER_USERNAME} / ${vars.MOODLE_TEACHER_PASSWORD}`);
-  log(`  Alumno:   ${vars.MOODLE_STUDENT_USERNAME} / ${vars.MOODLE_STUDENT_PASSWORD}`);
+  log(`  Teacher:  ${vars.MOODLE_TEACHER_USERNAME} / ${vars.MOODLE_TEACHER_PASSWORD}`);
+  log(`  Student:  ${vars.MOODLE_STUDENT_USERNAME} / ${vars.MOODLE_STUDENT_PASSWORD}`);
 }
 
 const COMMANDS = { env: ensureEnv, build, up, install: installSite, seed, activity, setup, down, reset, status, info, tasks: runAdhocTasks, course, theme, plugins, content, h5p };
 
 const [, , cmd, ...rest] = process.argv;
 if (!cmd || !(cmd in COMMANDS)) {
-  console.error(`Uso: node manage.mjs <${Object.keys(COMMANDS).join("|")}> [--moodle ${Object.keys(SITES).join("|")}]`);
+  console.error(`Usage: node manage.mjs <${Object.keys(COMMANDS).join("|")}> [--moodle ${Object.keys(SITES).join("|")}]`);
   process.exit(1);
 }
 
 try {
   site = selectSite(rest);
   envPath = site.envPath;
-  // Otra versión de Moodle, del entorno o del .env del sitio; si no, la del sitio.
+  // Another Moodle version, from the environment or the site's .env; otherwise the site's.
   site.version = process.env.MOODLE_VERSION || readEnvFile().MOODLE_VERSION || site.version;
-  // Para docker compose (docker-compose.yml): el proyecto, la imagen y el puerto del sitio. El
-  // entorno manda sobre el .env, y sin esto el 4.5 tomaría los valores por defecto (los del 5.2).
+  // For docker compose (docker-compose.yml): the site's project, image and port. The
+  // environment wins over .env, and without this 4.5 would take the defaults (5.2's).
   process.env.MOODLE_SANDBOX_PROJECT = site.project;
   process.env.MOODLE_VERSION = site.version;
   process.env.MOODLE_SANDBOX_PORT = sandboxPort();

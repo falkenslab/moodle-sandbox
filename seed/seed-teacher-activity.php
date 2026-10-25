@@ -1,16 +1,16 @@
 <?php
 /**
- * Convierte el curso de pruebas (seed-course.php) en un aula experimental con trabajo
- * real para un agente de profesor: da contenido coherente a la página, la tarea y el
- * foro (un tema de introducción a la programación), matricula a tres alumnos más, les
- * hace entregar la tarea con calidades distintas y abre dudas en el foro, una sin
- * responder y otra con una respuesta incorrecta de un compañero.
+ * Turns the test course (seed-course.php) into an experimental classroom with real
+ * work for a teacher agent: gives the page, the assignment and the forum coherent
+ * content (a lesson of an introduction to programming), enrols three more students,
+ * has them submit the assignment with different quality and opens questions in the
+ * forum, one unanswered and one answered wrongly by a classmate.
  *
  *   docker compose exec webserver php seed-teacher-activity.php
  *
- * Necesita que seed-course.php se haya ejecutado antes. Si los alumnos extra ya están en el
- * curso, termina sin tocar nada. Los alumnos pueden existir ya (los crea también seed-content.php):
- * entonces solo se matriculan.
+ * Needs seed-course.php to have run first. If the extra students are already in the course,
+ * it ends without touching anything. The students may exist already (seed-content.php creates
+ * them too): then they're only enrolled.
  */
 
 define('CLI_SCRIPT', true);
@@ -24,15 +24,15 @@ $CFG->noemailever = true;
 
 $course = $DB->get_record('course', ['shortname' => 'sandbox-course']);
 if (!$course) {
-    cli_error('No existe el curso "sandbox-course": ejecuta antes seed-course.php (npm run seed).');
+    cli_error('The course "sandbox-course" doesn\'t exist: run seed-course.php first (npm run seed).');
 }
 const SUBMITTING_STUDENTS = ['lucia.martin', 'marcos.lopez', 'sara.gil'];
 
 /**
- * Envía para calificar las entregas en borrador de esos alumnos, como lo haría cada uno con
- * "Enviar tarea". Hace falta porque la tarea exige ese paso (submissiondrafts = 1, el valor
- * del generador) y save_submission() deja la entrega en borrador aunque se le pida otro
- * estado: sin esto, el profesor no ve nada pendiente de corregir.
+ * Submits those students' draft submissions for grading, as each of them would with
+ * "Submit assignment". It's needed because the assignment requires that step (submissiondrafts
+ * = 1, the generator's value) and save_submission() leaves the submission as a draft even when
+ * asked for another status: without this, the teacher sees nothing waiting to be graded.
  */
 function submit_drafts(stdClass $course): int {
     global $DB;
@@ -55,9 +55,9 @@ function submit_drafts(stdClass $course): int {
 }
 
 /**
- * Pone a los alumnos sembrados la contraseña de MOODLE_SEEDED_STUDENTS_PASSWORD (la guarda
- * manage.mjs en .env y la publica `npm run info`), para poder entrar como cualquiera de ellos.
- * Sin la variable, no toca nada.
+ * Gives the seeded students the password in MOODLE_SEEDED_STUDENTS_PASSWORD (manage.mjs keeps it
+ * in .env and `npm run info` publishes it), so anyone can log in as any of them.
+ * Without the variable, it touches nothing.
  */
 function set_known_passwords(): void {
     global $DB;
@@ -74,19 +74,19 @@ function set_known_passwords(): void {
 
 $lucia = $DB->get_record('user', ['username' => 'lucia.martin']);
 if ($lucia && is_enrolled(context_course::instance($course->id), $lucia)) {
-    // Sembrada por una versión anterior: entregas en borrador y contraseñas desconocidas.
+    // Seeded by an earlier version: draft submissions and unknown passwords.
     set_known_passwords();
     $submitted = submit_drafts($course);
     cli_writeln($submitted > 0
-        ? "La actividad ya estaba sembrada; se han enviado {$submitted} entregas que seguían en borrador."
-        : 'La actividad del aula experimental ya está sembrada, no se hace nada.');
+        ? "The activity was already seeded; {$submitted} submissions still in draft have been submitted."
+        : 'The experimental classroom is already seeded, nothing to do.');
     exit(0);
 }
 
 $generator = new testing_data_generator();
 $transaction = $DB->start_delegated_transaction();
 
-// --- Contenido coherente para las actividades que creó seed-course.php ---
+// --- Coherent content for the activities seed-course.php created ---
 $page = $DB->get_record('page', ['course' => $course->id], '*', MUST_EXIST);
 $DB->update_record('page', (object) [
     'id' => $page->id,
@@ -126,14 +126,14 @@ $DB->update_record('forum', (object) [
 ]);
 rebuild_course_cache($course->id, true);
 
-// --- Alumnos extra ---
+// --- Extra students ---
 $students = [];
 foreach ([
     ['lucia.martin', 'Lucía', 'Martín'],
     ['marcos.lopez', 'Marcos', 'López'],
     ['sara.gil', 'Sara', 'Gil'],
 ] as [$username, $firstname, $lastname]) {
-    // Puede existir ya, sembrado por seed-content.php.
+    // It may exist already, seeded by seed-content.php.
     $user = $DB->get_record('user', ['username' => $username]) ?: $generator->create_user([
         'username' => $username,
         'password' => 'Sandbox-' . bin2hex(random_bytes(6)),
@@ -145,10 +145,10 @@ foreach ([
     $students[$username] = $user;
 }
 
-// --- Entregas de la tarea, de calidad distinta (el alumno "alumno" no entrega) ---
+// --- Assignment submissions, of different quality (the student "alumno" doesn't submit) ---
 $assigngenerator = $generator->get_plugin_generator('mod_assign');
 $submissions = [
-    // Completa y correcta.
+    // Complete and correct.
     'lucia.martin' => '<p>Una variable es un nombre que apunta a un valor guardado en la memoria del ' .
         'ordenador. Sirve para guardar datos y poder usarlos o cambiarlos después, por ejemplo ' .
         '<code>edad = 17</code> y luego <code>edad = edad + 1</code>.</p>' .
@@ -158,10 +158,10 @@ $submissions = [
         '<p><code>"3" + 3</code> da error porque "3" es un texto y 3 un número, y no se pueden sumar ' .
         'tipos distintos. Se arregla convirtiendo el texto a número: <code>int("3") + 3</code>, que ' .
         'da 6.</p>',
-    // Floja: correcta pero incompleta (sin ejemplos, sin el tercer punto).
+    // Thin: correct but incomplete (no examples, no third point).
     'marcos.lopez' => '<p>Una variable es donde se guardan los datos en un programa. Hay varios tipos ' .
         'de datos como números, texto y booleanos. Se usan mucho en programación.</p>',
-    // Con un error conceptual (confunde float con texto y la explicación del error).
+    // With a conceptual mistake (confuses float with text, and the explanation of the error).
     'sara.gil' => '<p>Una variable es una caja donde metes un valor, y el valor ya no puede cambiar una ' .
         'vez asignado.</p>' .
         '<p>Tipos: int (<code>5</code>), float, que es texto con decimales (<code>"3.5"</code>), str ' .
@@ -179,7 +179,7 @@ foreach ($submissions as $username => $text) {
 submit_drafts($course);
 set_known_passwords();
 
-// --- Foro: una duda sin responder y otra con una respuesta incorrecta de un compañero ---
+// --- Forum: one question unanswered and another with a classmate's wrong answer ---
 $forumgenerator = $generator->get_plugin_generator('mod_forum');
 $forumgenerator->create_discussion([
     'course' => $course->id,

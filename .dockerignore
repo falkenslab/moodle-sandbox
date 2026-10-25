@@ -1,5 +1,5 @@
-# La imagen solo necesita docker/ y php/: nada más entra en el contexto de construcción
-# (src/, el antiguo checkout, son decenas de miles de ficheros; .env, las contraseñas).
+# The image only needs docker/ and php/: nothing else goes into the build context
+# (src/, the old checkout, is tens of thousands of files; .env, the passwords).
 *
 !docker/
 !php/

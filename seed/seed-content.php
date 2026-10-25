@@ -1,37 +1,37 @@
 <?php
 /**
- * Crea el curso de contenido que lee la batería de pruebas de moodle-driver (falkenslab/moodle-sandbox#5):
- * "mcp-content", con una actividad de cada tipo y datos en ellas (entregas, intentos, respuestas,
- * debates, notas y visitas). La batería lo encuentra por su nombre corto y la tarea por su nombre
- * ("Tarea MCP"), así que los ids pueden variar entre sitios.
+ * Creates the content course that moodle-driver's test suite reads (falkenslab/moodle-sandbox#5):
+ * "mcp-content", with one activity of each type and data in them (submissions, attempts, responses,
+ * discussions, grades and views). The suite finds it by its short name and the assignment by its
+ * name ("Tarea MCP"), so the ids may differ between sites.
  *
  *   docker compose exec webserver php seed-content.php
  *
- * Lo que las pruebas exigen y por qué está así:
- * - La alumna con la que entra la batería es lucia.martin (la primera de `info --json`): está
- *   matriculada solo como alumna, ha entregado "Tarea MCP" y la tiene calificada con su rúbrica,
- *   ha visitado el curso y tiene más de seis entradas en el registro, de más de un minuto (se
- *   retrasan una hora). El administrador no se matricula.
- * - La sección general solo tiene un foro (sin foro de avisos: el primer foro que ve la alumna
- *   tiene debates); la primera página está en la sección 1 y el fichero en la 2, para la copia
- *   de seguridad parcial (una sección entera, una página y un fichero de otras).
- * - La página "Apuntes: bucles" es la primera actividad que se crea: en un sitio recién montado es
- *   el módulo 5, que la batería da por una página.
- * - El feedback es anónimo, con una pregunta de varias opciones respondida con varias; el
- *   questionnaire tiene preguntas de valoración, casillas, desplegable y sí/no, todas respondidas;
- *   un cuestionario tiene intentos terminados de tres alumnos.
+ * What the tests require and why it's like this:
+ * - The student the suite logs in as is lucia.martin (the first one in `info --json`): she's
+ *   enrolled only as a student, has submitted "Tarea MCP" and has it graded with its rubric,
+ *   has visited the course and has more than six log entries, older than a minute (they're
+ *   moved back an hour). The admin isn't enrolled.
+ * - The general section only has a forum (no announcements forum: the first forum the student
+ *   sees has discussions); the first page is in section 1 and the file in section 2, for the
+ *   partial backup (a whole section, plus a page and a file from other ones).
+ * - The page "Apuntes: bucles" is the first activity created: on a freshly installed site it's
+ *   module 5, which the suite takes for a page.
+ * - The feedback is anonymous, with a multiple choice question answered with several choices; the
+ *   questionnaire has rating, checkbox, dropdown and yes/no questions, all answered; a quiz has
+ *   finished attempts from three students.
  *
- * Lee los usuarios de MOODLE_TEACHER_USERNAME y MOODLE_STUDENT_USERNAME y la contraseña de los
- * alumnos sembrados de MOODLE_SEEDED_STUDENTS_PASSWORD; crea a esos alumnos si no existen (como
- * seed-teacher-activity.php). Si el curso ya existe, no hace nada.
+ * Reads the usernames from MOODLE_TEACHER_USERNAME and MOODLE_STUDENT_USERNAME and the seeded
+ * students' password from MOODLE_SEEDED_STUDENTS_PASSWORD; creates those students if they don't
+ * exist (as seed-teacher-activity.php does). If the course already exists, it does nothing.
  */
 
 define('CLI_SCRIPT', true);
 require(__DIR__ . '/config.php');
 require_once($CFG->libdir . '/clilib.php');
 require_once($CFG->libdir . '/testing/generator/lib.php');
-// El generador de rúbricas pide el generador de datos a testing_util: en 4.5 hay que cargarla; en
-// 5.x es core\test\testing_util y la carga Moodle solo.
+// The rubric generator asks testing_util for the data generator: in 4.5 it has to be loaded; in
+// 5.x it's core\test\testing_util and Moodle loads it on its own.
 if (file_exists($CFG->libdir . '/testing/classes/util.php')) {
     require_once($CFG->libdir . '/testing/classes/util.php');
 }
@@ -41,7 +41,7 @@ require_once($CFG->dirroot . '/mod/assign/locallib.php');
 require_once($CFG->dirroot . '/mod/quiz/locallib.php');
 require_once($CFG->dirroot . '/mod/choice/lib.php');
 require_once($CFG->dirroot . '/mod/feedback/lib.php');
-// Los generadores de preguntas y de respuestas necesitan las clases de PHPUnit (ver seed-course.php).
+// The question and response generators need PHPUnit's classes (see seed-course.php).
 require_once(__DIR__ . '/vendor/autoload.php');
 
 use mod_questionnaire\generator\question_response;
@@ -57,20 +57,20 @@ function env(string $name, string $default): string {
 }
 
 if ($DB->record_exists('course', ['shortname' => SHORTNAME])) {
-    cli_writeln('El curso "' . SHORTNAME . '" ya existe, no se hace nada.');
+    cli_writeln('The course "' . SHORTNAME . '" already exists, nothing to do.');
     exit(0);
 }
 
 $admin = get_admin();
-// Como el administrador: la rúbrica, los ficheros y algunos eventos necesitan un usuario.
+// As the admin: the rubric, the files and some events need a user.
 \core\session\manager::set_user($admin);
 $generator = new testing_data_generator();
 $transaction = $DB->start_delegated_transaction();
 
-// --- Personas ---
+// --- People ---
 $teacher = $DB->get_record('user', ['username' => env('MOODLE_TEACHER_USERNAME', 'profesor')], '*', MUST_EXIST);
 $alumno = $DB->get_record('user', ['username' => env('MOODLE_STUDENT_USERNAME', 'alumno')], '*', MUST_EXIST);
-// Los alumnos de seed-teacher-activity.php: si no existen todavía, se crean aquí igual que allí.
+// The students of seed-teacher-activity.php: if they don't exist yet, they're created here as there.
 $students = [];
 foreach ([['lucia.martin', 'Lucía', 'Martín'], ['marcos.lopez', 'Marcos', 'López'], ['sara.gil', 'Sara', 'Gil']] as [$username, $first, $last]) {
     $students[$username] = $DB->get_record('user', ['username' => $username]) ?: $generator->create_user([
@@ -83,24 +83,24 @@ foreach ([['lucia.martin', 'Lucía', 'Martín'], ['marcos.lopez', 'Marcos', 'Ló
 }
 [$lucia, $marcos, $sara] = array_values($students);
 
-// --- Curso ---
+// --- Course ---
 $course = $generator->create_course([
     'fullname' => 'Contenido para moodle-mcp',
     'shortname' => SHORTNAME,
     'summary' => 'Curso de contenido que lee la batería de pruebas de moodle-driver, generado por seed-content.php.',
     'format' => 'topics',
     'numsections' => 3,
-    // Sin foro de avisos: sería el primer foro del curso, y sin debates.
+    // No announcements forum: it would be the course's first forum, and without discussions.
     'newsitems' => 0,
     'startdate' => time() - 14 * DAYSECS,
     'enablecompletion' => 1,
-    // Las fechas de las actividades en la página del curso (la batería las lee de ahí). El generador
-    // deja 0; un curso creado desde la página toma el valor del sitio, 1.
+    // The activities' dates on the course page (the suite reads them from there). The generator
+    // leaves 0; a course created from the web page takes the site's value, 1.
     'showactivitydates' => 1,
 ]);
 $coursecontext = context_course::instance($course->id);
 
-// La página primero: en un sitio recién montado es el módulo 5 (ver arriba).
+// The page first: on a freshly installed site it's module 5 (see above).
 $page = $generator->create_module('page', ['course' => $course->id, 'section' => 1, 'name' => 'Apuntes: bucles',
     'content' => '<p>Un bucle repite un bloque de código. <code>for</code> recorre una secuencia; ' .
         '<code>while</code> repite mientras se cumple una condición.</p>']);
@@ -119,7 +119,7 @@ foreach ([$alumno, $lucia] as $member) {
     $generator->create_group_member(['groupid' => $group->id, 'userid' => $member->id]);
 }
 
-// --- Sección general: un foro con un debate y una respuesta ---
+// --- General section: a forum with a discussion and a reply ---
 $forumgenerator = $generator->get_plugin_generator('mod_forum');
 $intro = $generator->create_module('forum', ['course' => $course->id, 'section' => 0, 'name' => 'Foro de presentación',
     'type' => 'general', 'intro' => 'Preséntate a la clase.']);
@@ -128,7 +128,7 @@ $discussion = $forumgenerator->create_discussion(['course' => $course->id, 'foru
 $forumgenerator->create_post(['discussion' => $discussion->id, 'parent' => $discussion->firstpost, 'userid' => $lucia->id,
     'subject' => 'Re: Presentaos', 'message' => 'Hola, soy Lucía y quiero aprender a programar en Python.']);
 
-// --- Sección 1: libro, enlace, etiqueta y la tarea con rúbrica ---
+// --- Section 1: book, URL, label and the assignment with a rubric ---
 $book = $generator->create_module('book', ['course' => $course->id, 'section' => 1, 'name' => 'Libro: funciones']);
 $bookgenerator = $generator->get_plugin_generator('mod_book');
 $bookgenerator->create_chapter(['bookid' => $book->id, 'title' => 'Definir funciones',
@@ -158,7 +158,7 @@ foreach ([[$lucia, "for i in range(1, 11):\n    print(n, 'x', i, '=', n * i)"], 
     $assigngenerator->create_submission(['userid' => $student->id, 'cmid' => $assigncm->id,
         'onlinetext' => '<pre>' . s($text) . '</pre>']);
 }
-// Calificada por el profesor con la rúbrica, como en la página de calificación.
+// Graded by the teacher with the rubric, as on the grading page.
 \core\session\manager::set_user($teacher);
 $assign = new assign($assigncontext, $assigncm, $course);
 $rubricgenerator = $generator->get_plugin_generator('gradingform_rubric');
@@ -179,7 +179,7 @@ foreach ([[$lucia, 60, 40, 'Muy bien: el bucle es correcto y el código se lee f
 }
 \core\session\manager::set_user($admin);
 
-// --- Sección 2: fichero, carpeta, cuestionarios, encuestas, foro, H5P, lección y consulta ---
+// --- Section 2: file, folder, quizzes, surveys, forum, H5P, lesson and choice ---
 $generator->create_module('resource', ['course' => $course->id, 'section' => 2, 'name' => 'Fichero: enunciado',
     'defaultfilename' => 'enunciado.txt']);
 $draftid = file_get_unused_draft_itemid();
@@ -190,7 +190,7 @@ foreach (['ejemplo1.py' => "for i in range(3):\n    print(i)\n", 'ejemplo2.py' =
 }
 $generator->create_module('folder', ['course' => $course->id, 'section' => 2, 'name' => 'Carpeta: ejemplos', 'files' => $draftid]);
 
-/** Un cuestionario con preguntas de corrección automática (las de ejemplo de Moodle). */
+/** A quiz with automatically graded questions (Moodle's sample ones). */
 function seed_quiz(testing_data_generator $generator, stdClass $course, string $name, int $section, array $questions): stdClass {
     $quiz = $generator->create_module('quiz', ['course' => $course->id, 'section' => $section, 'name' => $name,
         'grade' => 10, 'sumgrades' => 0, 'preferredbehaviour' => 'deferredfeedback']);
@@ -200,7 +200,7 @@ function seed_quiz(testing_data_generator $generator, stdClass $course, string $
         $question = $questiongenerator->create_question($qtype, $which, ['category' => $category->id, 'name' => $qname]);
         quiz_add_quiz_question($question->id, $quiz);
     }
-    // Sin esto, sumgrades se queda a 0 y Moodle no deja empezar ningún intento (ver seed-course.php).
+    // Without this, sumgrades stays at 0 and Moodle doesn't let any attempt start (see seed-course.php).
     \mod_quiz\quiz_settings::create($quiz->id)->get_grade_calculator()->recompute_quiz_sumgrades();
     return $quiz;
 }
@@ -212,7 +212,7 @@ $quiz = seed_quiz($generator, $course, 'Cuestionario MCP', 2, [
     ['truefalse', 'true', 'while repite mientras se cumple la condición'],
     ['multichoice', 'one_of_four', 'Otra opción correcta'],
 ]);
-// Intentos terminados de tres alumnos, con aciertos distintos (para resultados y estadísticas).
+// Finished attempts from three students, with different scores (for results and statistics).
 $quizgenerator = $generator->get_plugin_generator('mod_quiz');
 foreach ([[$lucia, ['True', 'One', 'frog', '3.14', 'True', 'One']],
         [$marcos, ['True', 'Two', 'toad', '3.14', 'False', 'One']],
@@ -221,17 +221,17 @@ foreach ([[$lucia, ['True', 'One', 'frog', '3.14', 'True', 'One']],
     $attempt = $quizgenerator->create_attempt($quiz->id, $student->id);
     $responses = [];
     foreach ($answers as $i => $answer) {
-        // El resumen de la respuesta, como lo escribe la página de resultados ("True", "One", "frog").
+        // The response summary, as the results page writes it ("True", "One", "frog").
         $responses[$i + 1] = $answer;
     }
-    // Lo que hace submit_responses() del generador, que solo se puede usar en los tests (pide el uso
-    // de las preguntas con get_question_usage()): aquí se carga por su id.
+    // What the generator's submit_responses() does, which only works in tests (it gets the question
+    // usage with get_question_usage()): here it's loaded by its id.
     $attemptobj = \mod_quiz\quiz_attempt::create($attempt->id);
     $postdata = $generator->get_plugin_generator('core_question')->get_simulated_post_data_for_questions_in_usage(
         question_engine::load_questions_usage_by_activity($attemptobj->get_uniqueid()), $responses, false);
     $attemptobj->process_submitted_actions(time(), false, $postdata);
     if (method_exists($attemptobj, 'process_submit')) {
-        // 5.x: entregar y calificar son dos pasos.
+        // 5.x: submitting and grading are two steps.
         $attemptobj->process_submit(time(), false);
         $attemptobj->process_grade_submission(time());
     } else {
@@ -246,8 +246,8 @@ seed_quiz($generator, $course, 'Cuestionario de bucles', 2, [
     ['multichoice', 'one_of_four', 'Una opción más'],
 ]);
 
-// Questionnaire con un tipo de pregunta de cada (los que lee la batería: valoración, casillas,
-// desplegable y sí/no), respondido por los tres alumnos.
+// Questionnaire with one question of each type (those the suite reads: rating, checkboxes,
+// dropdown and yes/no), answered by the three students.
 $questionnairegenerator = $generator->get_plugin_generator('mod_questionnaire');
 $qrecord = $questionnairegenerator->create_instance(['course' => $course->id, 'section' => 2, 'name' => 'Encuesta MCP']);
 $qcm = get_coursemodule_from_instance('questionnaire', $qrecord->id, $course->id, false, MUST_EXIST);
@@ -288,12 +288,12 @@ foreach ([[$lucia, 'y', 'Bucles', 1, [0, 2], 1, [5, 4, 4], 6],
     ];
     $response = $questionnairegenerator->create_response($responses,
         ['questionnaireid' => $qrecord->id, 'userid' => $student->id]);
-    // El generador guarda el sí/no como texto; questionnaire lo lee de su propia tabla.
+    // The generator saves the yes/no as text; questionnaire reads it from its own table.
     $DB->insert_record('questionnaire_response_bool', ['response_id' => $response['id'],
         'question_id' => $questions['recomienda']->id, 'choice_id' => $yesno]);
 }
 
-// Feedback anónimo: una pregunta de varias opciones respondida con varias, y de otros tipos.
+// Anonymous feedback: a multiple choice question answered with several choices, and other types.
 $feedback = $generator->create_module('feedback', ['course' => $course->id, 'section' => 2, 'name' => 'Feedback MCP',
     'anonymous' => FEEDBACK_ANONYMOUS_YES, 'multiple_submit' => 0]);
 $feedbackgenerator = $generator->get_plugin_generator('mod_feedback');
@@ -322,7 +322,7 @@ foreach ([[$lucia, 1, [1, 3], 2, 3, 'Útil', 9], [$marcos, 2, [2], 1, 2, 'Difíc
             'palabra' => $palabra, 'comentarios' => 'Me ha servido para ' . strtolower($palabra) . '.', 'nota' => $nota] as $key => $value) {
         $answers["{$items[$key]->typ}_{$items[$key]->id}"] = $value;
     }
-    // Como el generador de feedback, pero con varias opciones en una respuesta (las casillas).
+    // Like the feedback generator, but with several choices in one answer (the checkboxes).
     $completion = new mod_feedback_completion($feedback, $feedbackcm, $course->id, false, null, null, $student->id);
     $completion->save_response_tmp((object) $answers);
     $completion->save_response();
@@ -363,22 +363,22 @@ foreach ([[$lucia, 0], [$marcos, 1], [$sara, 0]] as [$student, $option]) {
     choice_user_submit_response($options[$option]->id, choice_get_choice($choice->id), $student->id, $course, $choicecm);
 }
 
-// --- Sección 3: paquetes SCORM (los de ejemplo de Moodle) y un banco de preguntas (5.x) ---
+// --- Section 3: SCORM packages (Moodle's sample ones) and a question bank (5.x) ---
 $generator->create_module('scorm', ['course' => $course->id, 'section' => 3, 'name' => 'SCORM MCP (prueba)']);
 $generator->create_module('scorm', ['course' => $course->id, 'section' => 3, 'name' => 'SCORM: repaso']);
 if (core_component::get_component_directory('mod_qbank')) {
     $generator->create_module('qbank', ['course' => $course->id, 'name' => 'Banco de preguntas MCP']);
 }
 
-// --- Visitas: el registro de lo que han visto (informes de actividad y de participación) ---
-/** Dispara el evento de "ha visto la actividad" como ese usuario. */
+// --- Views: the log of what they've seen (activity and participation reports) ---
+/** Triggers the "viewed the activity" event as that user. */
 function seed_view(stdClass $user, string $modname, int $instanceid, int $cmid): void {
     \core\session\manager::set_user($user);
     $class = "\\mod_{$modname}\\event\\course_module_viewed";
     $class::create(['objectid' => $instanceid, 'context' => context_module::instance($cmid)])->trigger();
 }
 $views = [
-    // La alumna de la batería: el curso y varias actividades (más de seis entradas).
+    // The suite's student: the course and several activities (more than six entries).
     [$lucia, [['page', $page], ['page', $page], ['page', $page], ['assign', $assigninstance], ['quiz', $quiz],
         ['forum', $forum], ['book', $book]]],
     [$marcos, [['page', $page], ['page', $page], ['forum', $forum]]],
@@ -396,10 +396,10 @@ foreach ($views as [$user, $activities]) {
 
 $transaction->allow_commit();
 
-// Después de guardar: el registro de lo de arriba, una hora antes (la batería pide entradas de más
-// de un minuto), y el último acceso al curso de la alumna y el profesor.
+// After committing: the log of the above, an hour earlier (the suite wants entries older than a
+// minute), and the students' and the teacher's last access to the course.
 $hourago = time() - HOURSECS;
-// El registro guarda sus eventos en un búfer hasta el final del script: se escriben ya.
+// The log buffers its events until the script ends: write them now.
 get_log_manager()->dispose();
 $DB->execute('UPDATE {logstore_standard_log} SET timecreated = timecreated - ? WHERE courseid = ?', [HOURSECS, $course->id]);
 foreach ([$lucia, $marcos, $sara, $teacher] as $user) {

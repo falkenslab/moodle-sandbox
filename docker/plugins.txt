@@ -1,38 +1,38 @@
-# Los plugins que no vienen con Moodle, cada uno en una versión fija: la hecha para la serie de
-# Moodle de la imagen. Los instala docker/install-plugins.sh al construirla. Son los de un campus
-# real de Moodle 4.5 (falkenslab/moodle-sandbox#4), para probar programas contra un Moodle como
-# los de verdad.
+# The plugins that don't ship with Moodle, each in a pinned release: the one made for the image's
+# Moodle series. docker/install-plugins.sh installs them when the image is built. They are a real
+# Moodle 4.5 campus's (falkenslab/moodle-sandbox#4), to test programs against a Moodle like the
+# real ones.
 #
-# Una línea por plugin y serie: <serie> <componente> zip <url> <md5>
-#                             o <serie> <componente> git <repositorio> <etiqueta o commit>
-# La serie es el principio de la versión de Moodle: "4.5" vale para 4.5.x, "5" para cualquier 5.x
-# y "*" para todas. Un plugin sin línea para la serie de la imagen no se instala en ella.
+# One line per plugin and series: <series> <component> zip <url> <md5>
+#                              or <series> <component> git <repository> <tag or commit>
+# The series is the start of Moodle's version: "4.5" matches 4.5.x, "5" any 5.x and "*" all of
+# them. A plugin without a line for the image's series isn't installed in it.
 #
-# Los zip son los del directorio de plugins de Moodle (https://moodle.org/plugins), con el md5 que
-# publica; git, los que no están en él.
+# The zips are those of Moodle's plugins directory (https://moodle.org/plugins), with the md5 it
+# publishes; git, the ones that aren't in it.
 
-# Encuestas tipo cuestionario.
+# Questionnaire-style surveys.
 4.5 mod_questionnaire git https://github.com/PoetOS/moodle-mod_questionnaire.git v4.4.0
 5   mod_questionnaire git https://github.com/PoetOS/moodle-mod_questionnaire.git v5.0.3
 
-# Tipos de pregunta. CodeRunner ejecuta el código de las respuestas en Jobe (el contenedor jobe de
-# docker-compose.yml) con su propio comportamiento de pregunta.
+# Question types. CodeRunner runs the answers' code on Jobe (the jobe container of
+# docker-compose.yml), with its own question behaviour.
 *   qtype_coderunner zip https://marketplace.moodle.com/api/plugins/qtype_coderunner/versions/2026051000/download bd0562dfebdb88ee51b941638d9d9efb
 *   qbehaviour_adaptive_adapted_for_coderunner zip https://marketplace.moodle.com/api/plugins/qbehaviour_adaptive_adapted_for_coderunner/versions/2026051000/download 47e64f3b7dff2fb26781fbd13189a4a9
-# Formulas necesita adaptivemultipart (de los autores de STACK: su última versión es de 2022 y es la
-# que STACK sigue usando en 5.x).
+# Formulas needs adaptivemultipart (by STACK's authors: its latest release is from 2022 and it's
+# the one STACK still uses on 5.x).
 *   qbehaviour_adaptivemultipart zip https://marketplace.moodle.com/api/plugins/qbehaviour_adaptivemultipart/versions/2022092200/download 40f108dc4e41f691af5fc804c2c9868d
 *   qtype_formulas zip https://marketplace.moodle.com/api/plugins/qtype_formulas/versions/2026100800/download 1ad9dfa03fb2ffb2d4f9883698d1cd66
 *   qtype_gapfill zip https://marketplace.moodle.com/api/plugins/qtype_gapfill/versions/2026100500/download c68d7c9126078b6409d341d02c66837d
 4.5 qtype_ddmatch zip https://marketplace.moodle.com/api/plugins/qtype_ddmatch/versions/2025051900/download 4cbfd0b2053043317fd1beadbe38810b
 5   qtype_ddmatch zip https://marketplace.moodle.com/api/plugins/qtype_ddmatch/versions/2026090300/download 5251853202ad9ad33342977ba9d49979
 
-# Formatos de curso: cambian cómo se dibuja la página del curso. Para 5.2, grid solo tiene versión
-# para 5.0, y onetopic y tiles para 5.1: se usan esas, comprobadas en 5.2 (el curso se dibuja y sus
-# secciones se abren). En 5.2, onetopic y tiles no abren sus ventanas emergentes (la ayuda de los
-# iconos de onetopic; en tiles, las actividades que se configuren para abrirse en una y el selector
-# de iconos al editar): usan core/modal_factory, que 5.2 ya no tiene. Los de Gareth Barnard (grid,
-# topcoll) ya no están en el directorio de plugins: sus etiquetas de GitHub, una por serie.
+# Course formats: they change how the course page is drawn. For 5.2, grid only has a release for
+# 5.0, and onetopic and tiles for 5.1: those are used, checked on 5.2 (the course is drawn and its
+# sections open). On 5.2, onetopic and tiles don't open their pop-ups (the help of onetopic's
+# icons; in tiles, activities set to open in one and the icon picker when editing): they use
+# core/modal_factory, which 5.2 no longer has. Gareth Barnard's (grid, topcoll) are no longer in
+# the plugins directory: their GitHub tags, one per series.
 4.5 format_grid git https://github.com/gjb2048/moodle-format_grid.git V405.1.5
 5   format_grid git https://github.com/gjb2048/moodle-format_grid.git V500.1.2
 4.5 format_topcoll git https://github.com/gjb2048/moodle-format_topcoll.git V405.1.5
@@ -42,12 +42,12 @@
 4.5 format_tiles zip https://marketplace.moodle.com/api/plugins/format_tiles/versions/2025070355/download 0165571b5810eff0586989d2683503fa
 5   format_tiles zip https://marketplace.moodle.com/api/plugins/format_tiles/versions/2026012570/download 3641c5cf12c95d6d249b6673e31cd918
 
-# Actividades. Collabora y Jitsi se instalan sin servidor (necesitan uno de fuera): sus actividades
-# se crean, pero no abren documentos ni videollamadas. chat y survey vienen con Moodle 4.5 y salieron
-# de él en 5.0: en 5.x, los de moodlehq (sin etiquetas: un commit).
-# Sin versión para 5.2 (la usada en 5.x es la más nueva que hay, comprobada en 5.2: se instala, sus
-# páginas cargan sin errores y su JavaScript no usa módulos que 5.2 ya no tenga): choicegroup (hasta
-# 5.1), hotpot (hasta 5.0), lightboxgallery (hasta 5.1).
+# Activities. Collabora and Jitsi are installed without a server (they need an outside one): their
+# activities get created, but open no documents or video calls. chat and survey ship with Moodle
+# 4.5 and left it in 5.0: on 5.x, moodlehq's (no tags: a commit).
+# Without a release for 5.2 (the one used on 5.x is the newest there is, checked on 5.2: it
+# installs, its pages load without errors and its JavaScript uses no modules 5.2 no longer has):
+# choicegroup (up to 5.1), hotpot (up to 5.0), lightboxgallery (up to 5.1).
 4.5 mod_attendance zip https://marketplace.moodle.com/api/plugins/mod_attendance/versions/2024082404/download 7ec4a6b329420a581d8b606908f6a2c6
 5   mod_attendance zip https://marketplace.moodle.com/api/plugins/mod_attendance/versions/2026042102/download bd9a3798cba6aa4da4488d00e8cd6661
 *   mod_board zip https://marketplace.moodle.com/api/plugins/mod_board/versions/2025070723/download 1ac923d5f2a2a2ddb3410cd015e14fb9
@@ -69,18 +69,19 @@
 5   mod_chat git https://github.com/moodlehq/moodle-mod_chat.git 0d29fa11d2c12da5083d3fd21877d91def048fad
 5   mod_survey git https://github.com/moodlehq/moodle-mod_survey.git d6e0a2ce098e65994d3c32955d2a02f482fecdaa
 
-# Bloques. grade_me y quickmail no tienen versión para 5.x: la de 4.5, comprobada en 5.2 como arriba.
+# Blocks. grade_me and quickmail have no release for 5.x: the 4.5 one, checked on 5.2 as above.
 *   block_completion_progress zip https://marketplace.moodle.com/api/plugins/block_completion_progress/versions/2026083100/download 808c6e2a96c56b1505cf0eda9e1d8f19
 *   block_configurable_reports zip https://marketplace.moodle.com/api/plugins/block_configurable_reports/versions/2027050402/download 35578087aac6fd0a6c002c74711c3624
 *   block_grade_me zip https://marketplace.moodle.com/api/plugins/block_grade_me/versions/2024100700/download 19fa5c1bac1cca11d63dc88d55393ce1
 *   block_quickmail zip https://marketplace.moodle.com/api/plugins/block_quickmail/versions/2025102302/download 498e7c26fadedfee12c26011df336153
 *   block_xp zip https://marketplace.moodle.com/api/plugins/block_xp/versions/2026100300/download 488e062917de35278da987675b2ac310
 
-# Informes y editor. coursesize (solo 4.5) y benchmark (hasta 5.1), comprobados en 5.2 como arriba.
+# Reports and editor. coursesize (4.5 only) and benchmark (up to 5.1), checked on 5.2 as above.
 *   report_coursesize zip https://marketplace.moodle.com/api/plugins/report_coursesize/versions/2025121001/download e13312bf0774b97c3a5cdea994f80786
 *   report_benchmark zip https://marketplace.moodle.com/api/plugins/report_benchmark/versions/2026022600/download 5ad8911d5b0c9495c9702892266fba70
 *   tiny_fontcolor zip https://marketplace.moodle.com/api/plugins/tiny_fontcolor/versions/2026100700/download c31f06174796f3a13db4b9f0583d5442
 
-# Tema (el campus usa Classic, que viene con Moodle: npm run theme -- classic; este, npm run theme -- adaptable).
+# Theme (the campus uses Classic, which ships with Moodle: npm run theme -- classic; this one, npm
+# run theme -- adaptable).
 4.5 theme_adaptable git https://github.com/gjb2048/moodle-theme_adaptable.git V405.2.9
 5   theme_adaptable git https://github.com/gjb2048/moodle-theme_adaptable.git V502.2.1

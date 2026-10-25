@@ -1,12 +1,12 @@
-# Publica la imagen del sandbox en el registro de GitHub (ghcr.io/falkenslab/moodle-sandbox)
-# al crear una etiqueta de versión: v<versión de Moodle>, con un sufijo -N cuando cambia el
-# sandbox sin cambiar Moodle (v5.2.4, v5.2.4-2). Para amd64 y arm64 (Mac con chip M).
+# Publishes the sandbox's image to GitHub's registry (ghcr.io/falkenslab/moodle-sandbox) when a
+# version tag is created: v<Moodle version>, with a -N suffix when the sandbox changes without
+# changing Moodle (v5.2.4, v5.2.4-2). For amd64 and arm64 (Apple silicon Macs).
 #
-# Etiquetas de la imagen, para la etiqueta v5.2.4-2:
-#   5.2.4-2  esta construcción exacta
-#   5.2.4    la última construcción de ese Moodle (la que usa docker-compose.yml)
-#   5.2      la última de la serie 5.2
-name: Imagen
+# The image's tags, for the tag v5.2.4-2:
+#   5.2.4-2  this exact build
+#   5.2.4    the latest build of that Moodle (the one docker-compose.yml uses)
+#   5.2      the latest of the 5.2 series
+name: Image
 
 on:
   push:
@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Etiqueta a publicar (v5.2.4, v5.2.4-2…); debe existir en el repositorio"
+        description: "Tag to publish (v5.2.4, v5.2.4-2...); it must exist in the repository"
         required: true
 
 permissions:
@@ -25,7 +25,7 @@ jobs:
   image:
     runs-on: ubuntu-latest
     steps:
-      - name: Versiones a partir de la etiqueta
+      - name: Versions from the tag
         id: version
         env:
           TAG: ${{ inputs.tag || github.ref_name }}
@@ -34,12 +34,12 @@ jobs:
           moodle="${full%%-*}"            # 5.2.4
           series="${moodle%.*}"           # 5.2
           if ! [[ "$moodle" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "La etiqueta \"$TAG\" no es v<x.y.z> ni v<x.y.z>-<n>." >&2
+            echo "The tag \"$TAG\" is neither v<x.y.z> nor v<x.y.z>-<n>." >&2
             exit 1
           fi
           image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/moodle-sandbox"
           tags="$image:$moodle,$image:$series"
-          # Con sufijo, también la etiqueta exacta (sin él, sería la misma que la de Moodle).
+          # With a suffix, the exact tag too (without one, it would be the same as Moodle's).
           [ "$full" != "$moodle" ] && tags="$image:$full,$tags"
           {
             echo "ref=$TAG"
@@ -64,7 +64,7 @@ jobs:
         with:
           context: .
           platforms: linux/amd64,linux/arm64
-          # SANDBOX_BUILD marca la imagen como publicada: `up` la actualiza (ver Dockerfile).
+          # SANDBOX_BUILD marks the image as published: `up` updates it (see Dockerfile).
           build-args: |
             MOODLE_VERSION=${{ steps.version.outputs.moodle }}
             SANDBOX_BUILD=${{ steps.version.outputs.ref }}

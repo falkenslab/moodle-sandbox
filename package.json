@@ -2,7 +2,7 @@
   "name": "moodle-sandbox",
   "version": "0.1.0",
   "private": true,
-  "description": "Moodle real en Docker con un curso de pruebas, para probar agentes de alumno y de profesor",
+  "description": "A real Moodle in Docker with seeded courses, to test student and teacher agents",
   "author": "Francisco Vargas Ruiz",
   "type": "module",
   "engines": {
